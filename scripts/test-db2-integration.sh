@@ -29,6 +29,8 @@ DEFAULT_IMAGE="icr.io/db2_community/db2:12.1.5.0"
 REQUIRED_DIGEST="sha256:2de8151713c261843868c5c3411b57be6ae79d99d70a5b3022337836776bfda6"
 IMAGE="${DB2_IT_IMAGE:-$DEFAULT_IMAGE}"
 READY_TIMEOUT="${DB2_IT_READY_TIMEOUT:-480}"
+# Captured before the DB2_* reset below, which clears DB2_IT_REPORT_DIR too.
+REPORT_DIR_INPUT="${DB2_IT_REPORT_DIR:-}"
 DB_NAME="testdb"
 DB_USER="db2inst1"
 
@@ -261,7 +263,6 @@ export RUST_MIN_STACK=67108864
 STAGE="running tests"
 log "Running integration tests ($SUITE suite)..."
 cd "$REPO_ROOT"
-REPORT_DIR_INPUT="${DB2_IT_REPORT_DIR:-}"
 if [ -n "$REPORT_DIR_INPUT" ]; then
   mkdir -p "$REPORT_DIR_INPUT"
   REPORT_DIR="$(cd "$REPORT_DIR_INPUT" && pwd)"
