@@ -1,0 +1,64 @@
+name: Release dry run
+
+# Manual release rehearsal. It builds, tests, packages, verifies the
+# publishable crate and uploads artifacts. It never authenticates to a
+# registry and never publishes.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build and verify publishable crate (no publish)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+          components: rustfmt, clippy
+
+      - name: Fetch locked dependency graph
+        run: cargo fetch --locked
+
+      - name: Generate ephemeral TLS test fixtures
+        run: ./scripts/generate-test-tls-fixtures.sh
+
+      - name: Offline tests
+        run: cargo test --locked --offline
+
+      - name: Compile benchmarks without running them
+        run: cargo bench --locked --offline --no-run --features bench-internals
+
+      - name: Generate SBOM
+        run: python3 tools/sbom/generate_rust_sbom.py release-out
+
+      - name: Assemble third-party notices
+        run: python3 tools/sbom/assemble_rust_notices.py release-out
+
+      - name: Check crate contents
+        run: python3 tools/sbom/check_package_contents.py
+
+      - name: Create crate source package
+        run: cargo package --locked
+
+      - name: crates.io publish dry-run
+        run: cargo publish --dry-run --locked
+
+      - name: Stage crate artifact
+        run: mkdir -p release-out && cp target/package/justybase-db2-*.crate release-out/
+
+      - name: Upload dry-run artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: justybase-db2-release-dry-run
+          path: release-out/
+          if-no-files-found: error

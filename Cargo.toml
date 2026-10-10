@@ -1,0 +1,81 @@
+[package]
+name = "justybase-db2"
+version = "0.1.0-alpha.1"
+edition = "2024"
+rust-version = "1.98.1"
+description = "Native asynchronous DRDA driver for IBM Db2 LUW"
+readme = "README.md"
+repository = "https://github.com/justybase/JustyBase.Db2.Rust"
+homepage = "https://github.com/justybase/JustyBase.Db2.Rust"
+documentation = "https://docs.rs/justybase-db2"
+license = "MIT"
+keywords = ["db2", "database", "drda", "async", "tokio"]
+categories = ["database", "asynchronous", "network-programming"]
+include = [
+    "src/**",
+    "examples/**",
+    "benches/**",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+    "/CONTRIBUTING.md",
+    "/SECURITY.md",
+    "/BENCHMARK-BASELINE.md",
+    "/THIRD-PARTY-NOTICES.md",
+    "/API-COMPATIBILITY.md",
+    "/docs/DRIVER-GUIDE.md",
+    "/docs/QUALIFICATION.md",
+    "/docs/KERBEROS-STATUS.md",
+]
+# Test-only TLS material must never enter a crate source package; the CI
+# package-content check enforces the same rule independently.
+[lib]
+name = "justybase_db2"
+path = "src/lib.rs"
+
+[features]
+bench-internals = []
+
+[dependencies]
+tokio = { version = "1.53", features = ["fs", "io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+tokio-rustls = { version = "0.26.5", default-features = false, features = ["ring", "tls12"] }
+rustls-native-certs = "0.8.3"
+rustls-pki-types = { version = "1", features = ["std"] }
+tempfile = "3.27.0"
+des = "0.8"
+ring = "0.17.14"
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["async_tokio"] }
+stats_alloc = "0.1.10"
+
+[[bench]]
+name = "hot_paths"
+harness = false
+required-features = ["bench-internals"]
+
+[[bench]]
+name = "import"
+harness = false
+
+[[bench]]
+name = "replay"
+harness = false
+
+[[bench]]
+name = "reader"
+harness = false
+
+[[bench]]
+name = "pool_write"
+harness = false
+
+[[example]]
+name = "batch_benchmark"
+path = "examples/batch_benchmark.rs"
+required-features = ["bench-internals"]
+
+[[example]]
+name = "allocation_probe"
+path = "examples/allocation_probe.rs"
+required-features = ["bench-internals"]

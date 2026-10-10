@@ -1,0 +1,10 @@
+/target/
+/release-out/
+/sbom-out/
+/tests/fixtures/tls/
+__pycache__/
+*.log
+*.profraw
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,2831 @@
+{
+  "generator": "tools/api/generate-rust-surface.cjs",
+  "crate": "justybase-db2",
+  "counts": {
+    "struct": 62,
+    "enum": 19,
+    "trait": 0,
+    "fn": 73,
+    "type": 0,
+    "constant": 286,
+    "static": 0,
+    "union": 0,
+    "macro": 0,
+    "primitive": 0
+  },
+  "items": [
+    {
+      "path": "config::Config",
+      "kind": "struct",
+      "declaration": "pub struct Config { pub host: String, pub port: u16, pub database: String, pub user: String, pub password: String, pub use_ssl: bool, pub ssl_root_ca_path: String, pub ssl_client_cert_path: String, pub ssl_client_key_path: String, pub timeout_ms: i64, pub block_size: usize, pub protocol_limits: ProtocolLimits, pub security_mechanism: u16, pub kerberos_spn: String, pub kerberos_realm: String, pub krb5_config_file: String, pub krb5_keytab_file: String, pub krb5_ccache_file: String, pub gssapi_token_file: String, pub client_appl_name: String, pub client_wrkstn_name: String, pub client_userid: String, pub client_acctng: String, pub client_corr_token: String, pub params: HashMap<String, String>, }",
+      "methods": []
+    },
+    {
+      "path": "config::ConfigError",
+      "kind": "struct",
+      "declaration": "pub struct ConfigError(pub String);",
+      "methods": [
+        "pub fn kind(&self) -> Db2ErrorKind"
+      ]
+    },
+    {
+      "path": "config::parse_dsn",
+      "kind": "fn",
+      "declaration": "pub fn parse_dsn(input: &str) -> Result<Config, ConfigError>",
+      "methods": []
+    },
+    {
+      "path": "config::ProtocolLimits",
+      "kind": "struct",
+      "declaration": "pub struct ProtocolLimits { pub max_dss_size: usize, pub max_ddm_object_size: usize, pub max_reply_chain_bytes: usize, pub max_reply_chain_packets: usize, pub max_materialized_lob_size: usize, }",
+      "methods": []
+    },
+    {
+      "path": "config::redact_dsn",
+      "kind": "fn",
+      "declaration": "pub fn redact_dsn(input: &str) -> String",
+      "methods": []
+    },
+    {
+      "path": "converters::decfloat::decode_dfp",
+      "kind": "fn",
+      "declaration": "pub fn decode_dfp(data: &[u8]) -> Result<String, String>",
+      "methods": []
+    },
+    {
+      "path": "converters::decfloat::encode_dfp",
+      "kind": "fn",
+      "declaration": "pub fn encode_dfp(value: &str, byte_length: usize) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "converters::ebcdic::decode_cp500",
+      "kind": "fn",
+      "declaration": "pub fn decode_cp500(value: &[u8]) -> String",
+      "methods": []
+    },
+    {
+      "path": "converters::ebcdic::encode_cp500",
+      "kind": "fn",
+      "declaration": "pub fn encode_cp500(value: &str) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "converters::sql_dta::build_sql_dta",
+      "kind": "fn",
+      "declaration": "pub fn build_sql_dta( columns: &[ColumnDescription], values: &[Db2Value], ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "converters::sql_dta::build_sql_dta_with_external_data",
+      "kind": "fn",
+      "declaration": "pub fn build_sql_dta_with_external_data( columns: &[ColumnDescription], values: &[Db2Value], ) -> Result<EncodedSqlDta, String>",
+      "methods": []
+    },
+    {
+      "path": "converters::sql_dta::build_sql_dta_with_inputs",
+      "kind": "fn",
+      "declaration": "pub fn build_sql_dta_with_inputs( columns: &[ColumnDescription], inputs: &[Db2InputParameter<'_>], ) -> Result<EncodedSqlDta, String>",
+      "methods": []
+    },
+    {
+      "path": "converters::sql_dta::EncodedExternalData",
+      "kind": "enum",
+      "declaration": "pub enum EncodedExternalData { DdmObject(Vec<u8>), LobStream { parameter_index: usize, length: u64, }, }",
+      "methods": []
+    },
+    {
+      "path": "converters::sql_dta::EncodedSqlDta",
+      "kind": "struct",
+      "declaration": "pub struct EncodedSqlDta { pub sql_dta: Vec<u8>, pub external_data: Vec<EncodedExternalData>, }",
+      "methods": []
+    },
+    {
+      "path": "Db2BatchError",
+      "kind": "struct",
+      "declaration": "pub struct Db2BatchError { pub cause: Db2Error, pub failed_parameter_set_index: Option<usize>, pub completed_parameter_sets: usize, pub rows_affected: i64, }",
+      "methods": []
+    },
+    {
+      "path": "Db2Error",
+      "kind": "struct",
+      "declaration": "pub struct Db2Error { pub kind: Db2ErrorKind, pub outcome: Db2OperationOutcome, pub message: String, pub sql_code: Option<i32>, pub sql_state: Option<String>, pub cleanup: Option<Box<Db2Error>>, }",
+      "methods": [
+        "pub fn new(kind: Db2ErrorKind, message: impl Into<String>) -> Self",
+        "pub fn other(message: String) -> Self",
+        "pub fn with_cleanup(self, cleanup: Db2Error) -> Self"
+      ]
+    },
+    {
+      "path": "Db2ErrorKind",
+      "kind": "enum",
+      "declaration": "#[non_exhaustive]pub enum Db2ErrorKind {  InvalidConfiguration, ConnectionClosed, DatabaseNotFound, AuthenticationFailed, AuthorizationFailed, ParameterConversion, SqlServer, ServerResponse, Transport, Protocol, ResourceLimit, Unsupported, PoolTimeout, PoolExhausted, Other, }",
+      "methods": []
+    },
+    {
+      "path": "Db2ImportColumn",
+      "kind": "struct",
+      "declaration": "pub struct Db2ImportColumn { pub name: String, pub expected_sql_type: Option<u16>, }",
+      "methods": [
+        "pub fn new(name: impl Into<String>) -> Self",
+        "pub fn with_sql_type(self, sql_type: u16) -> Self"
+      ]
+    },
+    {
+      "path": "Db2ImportError",
+      "kind": "struct",
+      "declaration": "pub struct Db2ImportError { pub cause: Db2Error, pub failed_source_row: Option<u64>, pub progress: Db2ImportProgress, }",
+      "methods": []
+    },
+    {
+      "path": "Db2ImportOptions",
+      "kind": "struct",
+      "declaration": "pub struct Db2ImportOptions { pub policy: Db2ImportPolicy, pub notify_after_rows: Option<u64>, pub table_lock: bool, pub command_timeout_ms: u64, }",
+      "methods": [
+        "pub fn validate(self) -> Result<Self, Db2Error>"
+      ]
+    },
+    {
+      "path": "Db2ImportPolicy",
+      "kind": "enum",
+      "declaration": "pub enum Db2ImportPolicy { Atomic { max_batch_rows: usize, max_batch_bytes: usize, }, CommitEveryRows { rows: usize, max_batch_bytes: usize, }, }",
+      "methods": []
+    },
+    {
+      "path": "Db2ImportProgress",
+      "kind": "struct",
+      "declaration": "pub struct Db2ImportProgress { pub source_rows_read: u64, pub committed_rows: u64, pub committed_batches: u64, pub estimated_committed_bytes: u64, }",
+      "methods": []
+    },
+    {
+      "path": "Db2ImportTarget",
+      "kind": "struct",
+      "declaration": "pub struct Db2ImportTarget { pub schema: Option<String>, pub table: String, pub columns: Vec<Db2ImportColumn>, /* private fields */ }",
+      "methods": [
+        "pub fn insert_sql(&self) -> &str",
+        "pub fn new( schema: Option<&str>, table: &str, columns: Vec<Db2ImportColumn>, ) -> Result<Self, Db2Error>"
+      ]
+    },
+    {
+      "path": "Db2OperationOutcome",
+      "kind": "enum",
+      "declaration": "pub enum Db2OperationOutcome { NotStarted, Confirmed, Unknown, }",
+      "methods": []
+    },
+    {
+      "path": "Db2Warning",
+      "kind": "struct",
+      "declaration": "pub struct Db2Warning { pub sql_code: i32, pub sql_state: String, pub message: String, pub warning_flags: String, }",
+      "methods": []
+    },
+    {
+      "path": "diagnostics::Db2Diagnostic",
+      "kind": "struct",
+      "declaration": "pub struct Db2Diagnostic { pub operation: &'static str, pub duration: Duration, pub success: bool, pub bytes: u64, }",
+      "methods": []
+    },
+    {
+      "path": "diagnostics::Db2DiagnosticSubscription",
+      "kind": "struct",
+      "declaration": "pub struct Db2DiagnosticSubscription(/* private fields */);",
+      "methods": []
+    },
+    {
+      "path": "diagnostics::observe_db2_diagnostics",
+      "kind": "fn",
+      "declaration": "pub fn observe_db2_diagnostics( observer: impl Fn(&Db2Diagnostic) + Send + Sync + 'static, ) -> Db2DiagnosticSubscription",
+      "methods": []
+    },
+    {
+      "path": "error::Db2BatchError",
+      "kind": "struct",
+      "declaration": "",
+      "methods": []
+    },
+    {
+      "path": "error::Db2Error",
+      "kind": "struct",
+      "declaration": "",
+      "methods": []
+    },
+    {
+      "path": "error::Db2ErrorKind",
+      "kind": "enum",
+      "declaration": "",
+      "methods": []
+    },
+    {
+      "path": "error::Db2OperationOutcome",
+      "kind": "enum",
+      "declaration": "",
+      "methods": []
+    },
+    {
+      "path": "error::Db2Warning",
+      "kind": "struct",
+      "declaration": "",
+      "methods": []
+    },
+    {
+      "path": "import::Db2ImportColumn",
+      "kind": "struct",
+      "declaration": "",
+      "methods": []
+    },
+    {
+      "path": "import::Db2ImportError",
+      "kind": "struct",
+      "declaration": "",
+      "methods": []
+    },
+    {
+      "path": "import::Db2ImportOptions",
+      "kind": "struct",
+      "declaration": "",
+      "methods": []
+    },
+    {
+      "path": "import::Db2ImportPolicy",
+      "kind": "enum",
+      "declaration": "",
+      "methods": []
+    },
+    {
+      "path": "import::Db2ImportProgress",
+      "kind": "struct",
+      "declaration": "",
+      "methods": []
+    },
+    {
+      "path": "import::Db2ImportTarget",
+      "kind": "struct",
+      "declaration": "",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::ABNUOWRM",
+      "kind": "constant",
+      "declaration": "pub const ABNUOWRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::ACCRDB",
+      "kind": "constant",
+      "declaration": "pub const ACCRDB: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::ACCRDBRM",
+      "kind": "constant",
+      "declaration": "pub const ACCRDBRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::ACCSEC",
+      "kind": "constant",
+      "declaration": "pub const ACCSEC: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::ACCSECRD",
+      "kind": "constant",
+      "declaration": "pub const ACCSECRD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::ACCSECRM",
+      "kind": "constant",
+      "declaration": "pub const ACCSECRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::AGENT",
+      "kind": "constant",
+      "declaration": "pub const AGENT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::AGNPRMRM",
+      "kind": "constant",
+      "declaration": "pub const AGNPRMRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::BGNBND",
+      "kind": "constant",
+      "declaration": "pub const BGNBND: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::BGNBNDRM",
+      "kind": "constant",
+      "declaration": "pub const BGNBNDRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::BNDSQLSTT",
+      "kind": "constant",
+      "declaration": "pub const BNDSQLSTT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CCSIDDBC",
+      "kind": "constant",
+      "declaration": "pub const CCSIDDBC: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CCSIDMBC",
+      "kind": "constant",
+      "declaration": "pub const CCSIDMBC: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CCSIDMGR",
+      "kind": "constant",
+      "declaration": "pub const CCSIDMGR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CCSIDSBC",
+      "kind": "constant",
+      "declaration": "pub const CCSIDSBC: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CLSQRY",
+      "kind": "constant",
+      "declaration": "pub const CLSQRY: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CMDATHRM",
+      "kind": "constant",
+      "declaration": "pub const CMDATHRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CMDCHKRM",
+      "kind": "constant",
+      "declaration": "pub const CMDCHKRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CMDCMPRM",
+      "kind": "constant",
+      "declaration": "pub const CMDCMPRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CMDNSPRM",
+      "kind": "constant",
+      "declaration": "pub const CMDNSPRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CMDVLTRM",
+      "kind": "constant",
+      "declaration": "pub const CMDVLTRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CMMRQSRM",
+      "kind": "constant",
+      "declaration": "pub const CMMRQSRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CMNAPPC",
+      "kind": "constant",
+      "declaration": "pub const CMNAPPC: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CMNSYNCPT",
+      "kind": "constant",
+      "declaration": "pub const CMNSYNCPT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CMNTCPIP",
+      "kind": "constant",
+      "declaration": "pub const CMNTCPIP: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CNTQRY",
+      "kind": "constant",
+      "declaration": "pub const CNTQRY: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CodePoint",
+      "kind": "struct",
+      "declaration": "#[repr(transparent)]pub struct CodePoint(pub u16);",
+      "methods": [
+        "pub fn name(self) -> String"
+      ]
+    },
+    {
+      "path": "network::codepoint::CODPNT",
+      "kind": "constant",
+      "declaration": "pub const CODPNT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CODPNTDR",
+      "kind": "constant",
+      "declaration": "pub const CODPNTDR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CRRTKN",
+      "kind": "constant",
+      "declaration": "pub const CRRTKN: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::CSTMBCS",
+      "kind": "constant",
+      "declaration": "pub const CSTMBCS: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::DEPERRCD",
+      "kind": "constant",
+      "declaration": "pub const DEPERRCD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::DIAGLVL",
+      "kind": "constant",
+      "declaration": "pub const DIAGLVL: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::DICTIONARY",
+      "kind": "constant",
+      "declaration": "pub const DICTIONARY: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::DRPPKG",
+      "kind": "constant",
+      "declaration": "pub const DRPPKG: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::DSCERRCD",
+      "kind": "constant",
+      "declaration": "pub const DSCERRCD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::DSCINVRM",
+      "kind": "constant",
+      "declaration": "pub const DSCINVRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::DSCRDBTBL",
+      "kind": "constant",
+      "declaration": "pub const DSCRDBTBL: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::DSCSQLSTT",
+      "kind": "constant",
+      "declaration": "pub const DSCSQLSTT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::DTAMCHRM",
+      "kind": "constant",
+      "declaration": "pub const DTAMCHRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::DYNDTAFMT",
+      "kind": "constant",
+      "declaration": "pub const DYNDTAFMT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::ENDBND",
+      "kind": "constant",
+      "declaration": "pub const ENDBND: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::ENDDTARM",
+      "kind": "constant",
+      "declaration": "pub const ENDDTARM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::ENDQRYRM",
+      "kind": "constant",
+      "declaration": "pub const ENDQRYRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::ENDREF",
+      "kind": "constant",
+      "declaration": "pub const ENDREF: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::ENDUOWRM",
+      "kind": "constant",
+      "declaration": "pub const ENDUOWRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::EXCSAT",
+      "kind": "constant",
+      "declaration": "pub const EXCSAT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::EXCSATRD",
+      "kind": "constant",
+      "declaration": "pub const EXCSATRD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::EXCSATRM",
+      "kind": "constant",
+      "declaration": "pub const EXCSATRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::EXCSQLIMM",
+      "kind": "constant",
+      "declaration": "pub const EXCSQLIMM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::EXCSQLSET",
+      "kind": "constant",
+      "declaration": "pub const EXCSQLSET: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::EXCSQLSTT",
+      "kind": "constant",
+      "declaration": "pub const EXCSQLSTT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::EXTDTA",
+      "kind": "constant",
+      "declaration": "pub const EXTDTA: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::EXTNAM",
+      "kind": "constant",
+      "declaration": "pub const EXTNAM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::FDODSC",
+      "kind": "constant",
+      "declaration": "pub const FDODSC: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::FDODSCOFF",
+      "kind": "constant",
+      "declaration": "pub const FDODSCOFF: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::FDODTA",
+      "kind": "constant",
+      "declaration": "pub const FDODTA: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::FDOPRMOFF",
+      "kind": "constant",
+      "declaration": "pub const FDOPRMOFF: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::FDOTRPOFF",
+      "kind": "constant",
+      "declaration": "pub const FDOTRPOFF: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::FIXROWPRC",
+      "kind": "constant",
+      "declaration": "pub const FIXROWPRC: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::FORGET",
+      "kind": "constant",
+      "declaration": "pub const FORGET: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::FRCFIXROW",
+      "kind": "constant",
+      "declaration": "pub const FRCFIXROW: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::FREPRVREF",
+      "kind": "constant",
+      "declaration": "pub const FREPRVREF: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::GETNXTCHK",
+      "kind": "constant",
+      "declaration": "pub const GETNXTCHK: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::GETNXTLEN",
+      "kind": "constant",
+      "declaration": "pub const GETNXTLEN: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::GETNXTREF",
+      "kind": "constant",
+      "declaration": "pub const GETNXTREF: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::INTRDBRQS",
+      "kind": "constant",
+      "declaration": "pub const INTRDBRQS: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::LMTBLKPRC",
+      "kind": "constant",
+      "declaration": "pub const LMTBLKPRC: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::LSTCHK",
+      "kind": "constant",
+      "declaration": "pub const LSTCHK: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::MAXBLKEXT",
+      "kind": "constant",
+      "declaration": "pub const MAXBLKEXT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::MAXRSLCNT",
+      "kind": "constant",
+      "declaration": "pub const MAXRSLCNT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::MGRDEPRM",
+      "kind": "constant",
+      "declaration": "pub const MGRDEPRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::MGRLVLLS",
+      "kind": "constant",
+      "declaration": "pub const MGRLVLLS: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::MGRLVLN",
+      "kind": "constant",
+      "declaration": "pub const MGRLVLN: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::MGRLVLRM",
+      "kind": "constant",
+      "declaration": "pub const MGRLVLRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::MONITOR",
+      "kind": "constant",
+      "declaration": "pub const MONITOR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::MONITORRD",
+      "kind": "constant",
+      "declaration": "pub const MONITORRD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::NBRROW",
+      "kind": "constant",
+      "declaration": "pub const NBRROW: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::NEWPASSWORD",
+      "kind": "constant",
+      "declaration": "pub const NEWPASSWORD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::OBJNSPRM",
+      "kind": "constant",
+      "declaration": "pub const OBJNSPRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::OPNQFLRM",
+      "kind": "constant",
+      "declaration": "pub const OPNQFLRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::OPNQRY",
+      "kind": "constant",
+      "declaration": "pub const OPNQRY: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::OPNQRYRM",
+      "kind": "constant",
+      "declaration": "pub const OPNQRYRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::OUTEXP",
+      "kind": "constant",
+      "declaration": "pub const OUTEXP: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::OUTOVR",
+      "kind": "constant",
+      "declaration": "pub const OUTOVR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::OUTOVROPT",
+      "kind": "constant",
+      "declaration": "pub const OUTOVROPT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::OUTOVRPRI",
+      "kind": "constant",
+      "declaration": "pub const OUTOVRPRI: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PASSWORD",
+      "kind": "constant",
+      "declaration": "pub const PASSWORD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PBSD",
+      "kind": "constant",
+      "declaration": "pub const PBSD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PBSD_ISO",
+      "kind": "constant",
+      "declaration": "pub const PBSD_ISO: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PBSD_SCHEMA",
+      "kind": "constant",
+      "declaration": "pub const PBSD_SCHEMA: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PKGBNARM",
+      "kind": "constant",
+      "declaration": "pub const PKGBNARM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PKGBPARM",
+      "kind": "constant",
+      "declaration": "pub const PKGBPARM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PKGCNSTKN",
+      "kind": "constant",
+      "declaration": "pub const PKGCNSTKN: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PKGDFTCST",
+      "kind": "constant",
+      "declaration": "pub const PKGDFTCST: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PKGID",
+      "kind": "constant",
+      "declaration": "pub const PKGID: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PKGNAMCSN",
+      "kind": "constant",
+      "declaration": "pub const PKGNAMCSN: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PKGNAMCT",
+      "kind": "constant",
+      "declaration": "pub const PKGNAMCT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PKGSNLST",
+      "kind": "constant",
+      "declaration": "pub const PKGSNLST: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PRCCNVCD",
+      "kind": "constant",
+      "declaration": "pub const PRCCNVCD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PRCCNVRM",
+      "kind": "constant",
+      "declaration": "pub const PRCCNVRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PRCNAM",
+      "kind": "constant",
+      "declaration": "pub const PRCNAM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PRDDTA",
+      "kind": "constant",
+      "declaration": "pub const PRDDTA: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PRDID",
+      "kind": "constant",
+      "declaration": "pub const PRDID: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PRMNSPRM",
+      "kind": "constant",
+      "declaration": "pub const PRMNSPRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PRPHRCLST",
+      "kind": "constant",
+      "declaration": "pub const PRPHRCLST: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::PRPSQLSTT",
+      "kind": "constant",
+      "declaration": "pub const PRPSQLSTT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYATTSCR",
+      "kind": "constant",
+      "declaration": "pub const QRYATTSCR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYATTSNS",
+      "kind": "constant",
+      "declaration": "pub const QRYATTSNS: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYATTUPD",
+      "kind": "constant",
+      "declaration": "pub const QRYATTUPD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYBLKCTL",
+      "kind": "constant",
+      "declaration": "pub const QRYBLKCTL: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYBLKRST",
+      "kind": "constant",
+      "declaration": "pub const QRYBLKRST: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYBLKSZ",
+      "kind": "constant",
+      "declaration": "pub const QRYBLKSZ: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYCLSIMP",
+      "kind": "constant",
+      "declaration": "pub const QRYCLSIMP: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYCLSRLS",
+      "kind": "constant",
+      "declaration": "pub const QRYCLSRLS: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYDSC",
+      "kind": "constant",
+      "declaration": "pub const QRYDSC: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYDTA",
+      "kind": "constant",
+      "declaration": "pub const QRYDTA: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYINSID",
+      "kind": "constant",
+      "declaration": "pub const QRYINSID: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYNOPRM",
+      "kind": "constant",
+      "declaration": "pub const QRYNOPRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYOPTVAL",
+      "kind": "constant",
+      "declaration": "pub const QRYOPTVAL: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYPOPRM",
+      "kind": "constant",
+      "declaration": "pub const QRYPOPRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYPRCTYP",
+      "kind": "constant",
+      "declaration": "pub const QRYPRCTYP: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYRELSCR",
+      "kind": "constant",
+      "declaration": "pub const QRYRELSCR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYRFRTBL",
+      "kind": "constant",
+      "declaration": "pub const QRYRFRTBL: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYROWNBR",
+      "kind": "constant",
+      "declaration": "pub const QRYROWNBR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYROWSET",
+      "kind": "constant",
+      "declaration": "pub const QRYROWSET: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYROWSNS",
+      "kind": "constant",
+      "declaration": "pub const QRYROWSNS: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYRTNDTA",
+      "kind": "constant",
+      "declaration": "pub const QRYRTNDTA: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::QRYSCRORN",
+      "kind": "constant",
+      "declaration": "pub const QRYSCRORN: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDB",
+      "kind": "constant",
+      "declaration": "pub const RDB: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBACCCL",
+      "kind": "constant",
+      "declaration": "pub const RDBACCCL: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBACCRM",
+      "kind": "constant",
+      "declaration": "pub const RDBACCRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBAFLRM",
+      "kind": "constant",
+      "declaration": "pub const RDBAFLRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBALWUPD",
+      "kind": "constant",
+      "declaration": "pub const RDBALWUPD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBATHRM",
+      "kind": "constant",
+      "declaration": "pub const RDBATHRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBCMM",
+      "kind": "constant",
+      "declaration": "pub const RDBCMM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBCMTOK",
+      "kind": "constant",
+      "declaration": "pub const RDBCMTOK: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBCOLID",
+      "kind": "constant",
+      "declaration": "pub const RDBCOLID: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBINTTKN",
+      "kind": "constant",
+      "declaration": "pub const RDBINTTKN: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBNACRM",
+      "kind": "constant",
+      "declaration": "pub const RDBNACRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBNAM",
+      "kind": "constant",
+      "declaration": "pub const RDBNAM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBNFNRM",
+      "kind": "constant",
+      "declaration": "pub const RDBNFNRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBRLLBCK",
+      "kind": "constant",
+      "declaration": "pub const RDBRLLBCK: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBRLLBCK2",
+      "kind": "constant",
+      "declaration": "pub const RDBRLLBCK2: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RDBUPDRM",
+      "kind": "constant",
+      "declaration": "pub const RDBUPDRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::REBIND",
+      "kind": "constant",
+      "declaration": "pub const REBIND: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RLSCONV",
+      "kind": "constant",
+      "declaration": "pub const RLSCONV: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RSCLMTRM",
+      "kind": "constant",
+      "declaration": "pub const RSCLMTRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RSCNAM",
+      "kind": "constant",
+      "declaration": "pub const RSCNAM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RSCTYP",
+      "kind": "constant",
+      "declaration": "pub const RSCTYP: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RSLSETFLG",
+      "kind": "constant",
+      "declaration": "pub const RSLSETFLG: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RSLSETRM",
+      "kind": "constant",
+      "declaration": "pub const RSLSETRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RSNCOD",
+      "kind": "constant",
+      "declaration": "pub const RSNCOD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RSYNCMGR",
+      "kind": "constant",
+      "declaration": "pub const RSYNCMGR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RSYNCTYP",
+      "kind": "constant",
+      "declaration": "pub const RSYNCTYP: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RTNEXTDTA",
+      "kind": "constant",
+      "declaration": "pub const RTNEXTDTA: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::RTNSQLDA",
+      "kind": "constant",
+      "declaration": "pub const RTNSQLDA: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SECCHK",
+      "kind": "constant",
+      "declaration": "pub const SECCHK: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SECCHKCD",
+      "kind": "constant",
+      "declaration": "pub const SECCHKCD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SECCHKRM",
+      "kind": "constant",
+      "declaration": "pub const SECCHKRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SECMEC",
+      "kind": "constant",
+      "declaration": "pub const SECMEC: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SECMGR",
+      "kind": "constant",
+      "declaration": "pub const SECMGR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SECMGRNM",
+      "kind": "constant",
+      "declaration": "pub const SECMGRNM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SECTKN",
+      "kind": "constant",
+      "declaration": "pub const SECTKN: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SecurityMechanism",
+      "kind": "enum",
+      "declaration": "#[repr(u16)]pub enum SecurityMechanism { DCESEC = 1, USRIDPWD = 3, USRIDONL = 4, USRIDNWPWD = 5, USRSBSPWD = 6, USRENCPWD = 7, USRSSBPWD = 8, EUSRIDPWD = 9, EUSRIDNWPWD = 10, KERBEROS = 11, }",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SPVNAM",
+      "kind": "constant",
+      "declaration": "pub const SPVNAM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLAM",
+      "kind": "constant",
+      "declaration": "pub const SQLAM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLATTR",
+      "kind": "constant",
+      "declaration": "pub const SQLATTR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLCARD",
+      "kind": "constant",
+      "declaration": "pub const SQLCARD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLCINRD",
+      "kind": "constant",
+      "declaration": "pub const SQLCINRD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLCSRHLD",
+      "kind": "constant",
+      "declaration": "pub const SQLCSRHLD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLDARD",
+      "kind": "constant",
+      "declaration": "pub const SQLDARD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLDTA",
+      "kind": "constant",
+      "declaration": "pub const SQLDTA: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLDTARD",
+      "kind": "constant",
+      "declaration": "pub const SQLDTARD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLERRRM",
+      "kind": "constant",
+      "declaration": "pub const SQLERRRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLRSLRD",
+      "kind": "constant",
+      "declaration": "pub const SQLRSLRD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLSTT",
+      "kind": "constant",
+      "declaration": "pub const SQLSTT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SQLSTTVRB",
+      "kind": "constant",
+      "declaration": "pub const SQLSTTVRB: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SRVCLSNM",
+      "kind": "constant",
+      "declaration": "pub const SRVCLSNM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SRVDGN",
+      "kind": "constant",
+      "declaration": "pub const SRVDGN: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SRVNAM",
+      "kind": "constant",
+      "declaration": "pub const SRVNAM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SRVRLSLV",
+      "kind": "constant",
+      "declaration": "pub const SRVRLSLV: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::STTDECDEL",
+      "kind": "constant",
+      "declaration": "pub const STTDECDEL: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::STTSTRDEL",
+      "kind": "constant",
+      "declaration": "pub const STTSTRDEL: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SUPERVISOR",
+      "kind": "constant",
+      "declaration": "pub const SUPERVISOR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SVCERRNO",
+      "kind": "constant",
+      "declaration": "pub const SVCERRNO: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SVRCOD",
+      "kind": "constant",
+      "declaration": "pub const SVRCOD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SYNCCRD",
+      "kind": "constant",
+      "declaration": "pub const SYNCCRD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SYNCCTL",
+      "kind": "constant",
+      "declaration": "pub const SYNCCTL: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SYNCLOG",
+      "kind": "constant",
+      "declaration": "pub const SYNCLOG: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SYNCPTMGR",
+      "kind": "constant",
+      "declaration": "pub const SYNCPTMGR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SYNCRRD",
+      "kind": "constant",
+      "declaration": "pub const SYNCRRD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SYNCRSY",
+      "kind": "constant",
+      "declaration": "pub const SYNCRSY: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SYNCTYPE",
+      "kind": "constant",
+      "declaration": "pub const SYNCTYPE: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SYNERRCD",
+      "kind": "constant",
+      "declaration": "pub const SYNERRCD: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::SYNTAXRM",
+      "kind": "constant",
+      "declaration": "pub const SYNTAXRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::TIMEOUT",
+      "kind": "constant",
+      "declaration": "pub const TIMEOUT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::TRGDFTRT",
+      "kind": "constant",
+      "declaration": "pub const TRGDFTRT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::TRGNSPRM",
+      "kind": "constant",
+      "declaration": "pub const TRGNSPRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::TYPDEFNAM",
+      "kind": "constant",
+      "declaration": "pub const TYPDEFNAM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::TYPDEFOVR",
+      "kind": "constant",
+      "declaration": "pub const TYPDEFOVR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::TYPSQLDA",
+      "kind": "constant",
+      "declaration": "pub const TYPSQLDA: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::UNICODEMGR",
+      "kind": "constant",
+      "declaration": "pub const UNICODEMGR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::UOWDSP",
+      "kind": "constant",
+      "declaration": "pub const UOWDSP: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::USRID",
+      "kind": "constant",
+      "declaration": "pub const USRID: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::VALNSPRM",
+      "kind": "constant",
+      "declaration": "pub const VALNSPRM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::VRSNAM",
+      "kind": "constant",
+      "declaration": "pub const VRSNAM: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::XAFLAGS",
+      "kind": "constant",
+      "declaration": "pub const XAFLAGS: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::XAMGR",
+      "kind": "constant",
+      "declaration": "pub const XAMGR: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::XARETVAL",
+      "kind": "constant",
+      "declaration": "pub const XARETVAL: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::XID",
+      "kind": "constant",
+      "declaration": "pub const XID: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::codepoint::XIDCNT",
+      "kind": "constant",
+      "declaration": "pub const XIDCNT: CodePoint;",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::ColumnDescription",
+      "kind": "struct",
+      "declaration": "pub struct ColumnDescription { pub name: String, pub sql_type: u16, pub length: u64, pub precision: u16, pub scale: u16, pub nullable: bool, }",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::DdmObjectRef",
+      "kind": "struct",
+      "declaration": "pub struct DdmObjectRef<'a> { pub codepoint: CodePoint, pub payload: &'a [u8], }",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::DdmObjects",
+      "kind": "struct",
+      "declaration": "pub struct DdmObjects<'a> { /* private fields */ }",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::default_manager_levels",
+      "kind": "fn",
+      "declaration": "pub fn default_manager_levels() -> Vec<ManagerLevel>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::FieldDescriptor",
+      "kind": "struct",
+      "declaration": "pub struct FieldDescriptor { pub field_type: u8, pub precision_scale: [u8; 2], }",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::find_ddm_parameter",
+      "kind": "fn",
+      "declaration": "pub fn find_ddm_parameter( data: &[u8], wanted: CodePoint, ) -> Result<Option<&[u8]>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::ManagerLevel",
+      "kind": "struct",
+      "declaration": "pub struct ManagerLevel { pub manager: CodePoint, pub level: u16, }",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_accrdb",
+      "kind": "fn",
+      "declaration": "pub fn pack_accrdb( product_id: &str, database: &str, encoding: StringEncoding, ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_accsec",
+      "kind": "fn",
+      "declaration": "pub fn pack_accsec( database: &str, security: SecurityMechanism, token: &[u8], ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_bytes",
+      "kind": "fn",
+      "declaration": "pub fn pack_bytes(codepoint: CodePoint, value: &[u8]) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_close_procedure_result_set",
+      "kind": "fn",
+      "declaration": "pub fn pack_close_procedure_result_set( section: &ResultSetPackageSection, query_id: u64, ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_commit",
+      "kind": "fn",
+      "declaration": "pub fn pack_commit() -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_continue_procedure_result_set",
+      "kind": "fn",
+      "declaration": "pub fn pack_continue_procedure_result_set( section: &ResultSetPackageSection, block_size: u32, query_id: u64, ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_continue_query",
+      "kind": "fn",
+      "declaration": "pub fn pack_continue_query( package: &str, token: &str, section: u16, db: &str, block: u32, id: u64, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_continue_result_set_query",
+      "kind": "fn",
+      "declaration": "pub fn pack_continue_result_set_query( section: &ResultSetPackageSection, block_size: u32, query_id: u64, rowset_size: Option<u32>, return_all_data: bool, ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_ddm_object",
+      "kind": "fn",
+      "declaration": "pub fn pack_ddm_object(codepoint: CodePoint, body: &[u8]) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_describe_sql_statement",
+      "kind": "fn",
+      "declaration": "pub fn pack_describe_sql_statement( package: &str, token: &str, section: u16, database: &str, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_excsat",
+      "kind": "fn",
+      "declaration": "pub fn pack_excsat( ext_name: &str, server_name: &str, release: &str, server_class: &str, levels: &[ManagerLevel], ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_excsat_manager_levels",
+      "kind": "fn",
+      "declaration": "pub fn pack_excsat_manager_levels(levels: &[ManagerLevel]) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_exec_sql_immediate",
+      "kind": "fn",
+      "declaration": "pub fn pack_exec_sql_immediate( package: &str, token: &str, section: u16, database: &str, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_execute_sql_set",
+      "kind": "fn",
+      "declaration": "pub fn pack_execute_sql_set( package: &str, token: &str, section: u16, database: &str, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_execute_sql_statement",
+      "kind": "fn",
+      "declaration": "pub fn pack_execute_sql_statement( package: &str, token: &str, section: u16, database: &str, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_execute_sql_statement_for_result_sets",
+      "kind": "fn",
+      "declaration": "pub fn pack_execute_sql_statement_for_result_sets( package: &str, token: &str, section: u16, database: &str, maximum_result_sets: u16, query_block_size: u32, query_rowset_size: Option<u32>, output_expected: bool, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_get_next_chunk",
+      "kind": "fn",
+      "declaration": "pub fn pack_get_next_chunk( package: &str, token: &str, section: u16, database: &str, query_id: u64, locator: u64, requested_length: u64, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_interrupt_rdb_request",
+      "kind": "fn",
+      "declaration": "pub fn pack_interrupt_rdb_request(token: &[u8]) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_null_string",
+      "kind": "fn",
+      "declaration": "pub fn pack_null_string( value: Option<&str>, encoding: StringEncoding, ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_open_query",
+      "kind": "fn",
+      "declaration": "pub fn pack_open_query( package: &str, token: &str, section: u16, db: &str, block: u32, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_open_query_with_params",
+      "kind": "fn",
+      "declaration": "pub fn pack_open_query_with_params( package: &str, token: &str, section: u16, db: &str, block: u32, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_package_name_csn",
+      "kind": "fn",
+      "declaration": "pub fn pack_package_name_csn( database: &str, package: &str, token: &str, section: u16, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_prepare_sql_statement",
+      "kind": "fn",
+      "declaration": "pub fn pack_prepare_sql_statement( package: &str, token: &str, section: u16, database: &str, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_rollback",
+      "kind": "fn",
+      "declaration": "pub fn pack_rollback() -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_secchk",
+      "kind": "fn",
+      "declaration": "pub fn pack_secchk( security: u16, token: &[u8], database: &str, user: &str, password: &[u8], encrypted: bool, encoding: StringEncoding, ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_secchk_eusridpwd",
+      "kind": "fn",
+      "declaration": "pub fn pack_secchk_eusridpwd( encrypted_userid: &[u8], encrypted_password: &[u8], database: &str, ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_secchk_kerberos",
+      "kind": "fn",
+      "declaration": "pub fn pack_secchk_kerberos( token: &[u8], database: &str, user: &str, ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_sql_statement",
+      "kind": "fn",
+      "declaration": "pub fn pack_sql_statement(sql: &str) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_string",
+      "kind": "fn",
+      "declaration": "pub fn pack_string( codepoint: CodePoint, value: &str, encoding: StringEncoding, ) -> Result<Vec<u8>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_u16",
+      "kind": "fn",
+      "declaration": "pub fn pack_u16(codepoint: CodePoint, value: u16) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_u32",
+      "kind": "fn",
+      "declaration": "pub fn pack_u32(codepoint: CodePoint, value: u32) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::pack_u64",
+      "kind": "fn",
+      "declaration": "pub fn pack_u64(codepoint: CodePoint, value: u64) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::parse_ddm_parameters",
+      "kind": "fn",
+      "declaration": "pub fn parse_ddm_parameters( data: &[u8], ) -> Result<HashMap<CodePoint, Vec<u8>>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::parse_progressive_chunk_reply",
+      "kind": "fn",
+      "declaration": "pub fn parse_progressive_chunk_reply( replies: &[DssPacket], ) -> Result<ProgressiveChunkReply, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::parse_query_descriptor",
+      "kind": "fn",
+      "declaration": "pub fn parse_query_descriptor( data: &[u8], ) -> Result<Vec<FieldDescriptor>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::parse_result_set_sections",
+      "kind": "fn",
+      "declaration": "pub fn parse_result_set_sections( data: &[u8], ) -> Result<Vec<ResultSetPackageSection>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::parse_sql_card",
+      "kind": "fn",
+      "declaration": "pub fn parse_sql_card( data: &[u8], little_endian: bool, ) -> Result<SqlCard, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::parse_sql_cursor_info",
+      "kind": "fn",
+      "declaration": "pub fn parse_sql_cursor_info( data: &[u8], little_endian: bool, ) -> Result<Vec<ColumnDescription>, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::parse_sql_dard",
+      "kind": "fn",
+      "declaration": "pub fn parse_sql_dard( data: &[u8], little_endian: bool, ) -> Result<Vec<ColumnDescription>, Db2Error>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::parse_sql_dta_reply",
+      "kind": "fn",
+      "declaration": "pub fn parse_sql_dta_reply( data: &[u8], ) -> Result<(Vec<FieldDescriptor>, Vec<u8>), String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::parse_sql_result_set_count",
+      "kind": "fn",
+      "declaration": "pub fn parse_sql_result_set_count(data: &[u8]) -> Result<usize, String>",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::ProgressiveChunkReply",
+      "kind": "struct",
+      "declaration": "pub struct ProgressiveChunkReply { pub data: Vec<u8>, pub end_of_reference: bool, pub is_last_chunk: bool, }",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::ResultSetPackageSection",
+      "kind": "struct",
+      "declaration": "pub struct ResultSetPackageSection { pub database: Vec<u8>, pub schema: Vec<u8>, pub package_name: Vec<u8>, pub consistency_token: [u8; 8], pub section_number: u16, }",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::SqlCard",
+      "kind": "struct",
+      "declaration": "pub struct SqlCard { pub sql_code: i32, pub sql_state: String, pub message: String, pub rows_affected: i64, pub warning_flags: String, }",
+      "methods": [
+        "pub fn warning(&self) -> Option<Db2Warning>"
+      ]
+    },
+    {
+      "path": "network::ddm::StringEncoding",
+      "kind": "enum",
+      "declaration": "pub enum StringEncoding { Cp500, Utf8, }",
+      "methods": []
+    },
+    {
+      "path": "network::ddm::visit_ddm_parameters",
+      "kind": "fn",
+      "declaration": "pub fn visit_ddm_parameters<'a>( data: &'a [u8], visitor: impl FnMut(DdmObjectRef<'a>), ) -> Result<(), String>",
+      "methods": []
+    },
+    {
+      "path": "network::dss::build_dss_header",
+      "kind": "fn",
+      "declaration": "pub fn build_dss_header( payload_len: usize, kind: u8, chained: bool, same_id: bool, has_error: bool, correlation_id: u16, ) -> [u8; 6]",
+      "methods": []
+    },
+    {
+      "path": "network::dss::DSS_FLAG_CHAINED",
+      "kind": "constant",
+      "declaration": "pub const DSS_FLAG_CHAINED: u8 = 0x40;",
+      "methods": []
+    },
+    {
+      "path": "network::dss::DSS_FLAG_ERROR",
+      "kind": "constant",
+      "declaration": "pub const DSS_FLAG_ERROR: u8 = 0x20;",
+      "methods": []
+    },
+    {
+      "path": "network::dss::DSS_FLAG_SAME_ID",
+      "kind": "constant",
+      "declaration": "pub const DSS_FLAG_SAME_ID: u8 = 0x10;",
+      "methods": []
+    },
+    {
+      "path": "network::dss::DSS_MAGIC",
+      "kind": "constant",
+      "declaration": "pub const DSS_MAGIC: u8 = 0xd0;",
+      "methods": []
+    },
+    {
+      "path": "network::dss::DSS_TYPE_COMM",
+      "kind": "constant",
+      "declaration": "pub const DSS_TYPE_COMM: u8 = 4;",
+      "methods": []
+    },
+    {
+      "path": "network::dss::DSS_TYPE_OBJECT",
+      "kind": "constant",
+      "declaration": "pub const DSS_TYPE_OBJECT: u8 = 3;",
+      "methods": []
+    },
+    {
+      "path": "network::dss::DSS_TYPE_REPLY",
+      "kind": "constant",
+      "declaration": "pub const DSS_TYPE_REPLY: u8 = 2;",
+      "methods": []
+    },
+    {
+      "path": "network::dss::DSS_TYPE_REQUEST",
+      "kind": "constant",
+      "declaration": "pub const DSS_TYPE_REQUEST: u8 = 1;",
+      "methods": []
+    },
+    {
+      "path": "network::dss::DssHeader",
+      "kind": "struct",
+      "declaration": "pub struct DssHeader { pub length: u16, pub kind: u8, pub chained: bool, pub same_id: bool, pub has_error: bool, pub correlation_id: u16, }",
+      "methods": []
+    },
+    {
+      "path": "network::dss::DssPacket",
+      "kind": "struct",
+      "declaration": "pub struct DssPacket { pub header: DssHeader, pub codepoint: CodePoint, pub payload: DssPayload, pub more_data: bool, }",
+      "methods": [
+        "pub fn new( header: DssHeader, codepoint: CodePoint, payload: Vec<u8>, more_data: bool, ) -> Self",
+        "pub fn payload(&self) -> &[u8]"
+      ]
+    },
+    {
+      "path": "network::dss::DssPayload",
+      "kind": "struct",
+      "declaration": "pub struct DssPayload { /* private fields */ }",
+      "methods": [
+        "pub fn as_slice(&self) -> &[u8]",
+        "pub fn to_vec(&self) -> Vec<u8>",
+        "pub fn try_into_vec(self) -> Result<Vec<u8>, String>"
+      ]
+    },
+    {
+      "path": "network::dss::encode_reply_dss",
+      "kind": "fn",
+      "declaration": "pub fn encode_reply_dss( ddm: &[u8], chained: bool, correlation_id: u16, ) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "network::dss::encode_request_dss",
+      "kind": "fn",
+      "declaration": "pub fn encode_request_dss( payload: &[u8], current_id: u16, next_same_id: bool, last_packet: bool, ) -> Result<(Vec<u8>, u16), String>",
+      "methods": []
+    },
+    {
+      "path": "network::dss::read_ddm_object",
+      "kind": "fn",
+      "declaration": "pub fn read_ddm_object(body: &[u8]) -> Result<(CodePoint, Vec<u8>), String>",
+      "methods": []
+    },
+    {
+      "path": "network::dss::read_dss",
+      "kind": "fn",
+      "declaration": "pub async fn read_dss<R: AsyncRead + Unpin>( reader: &mut R, ) -> Result<DssPacket, String>",
+      "methods": []
+    },
+    {
+      "path": "network::dss::write_external_blob_dss",
+      "kind": "fn",
+      "declaration": "pub async fn write_external_blob_dss<W, R>( destination: &mut W, source: &mut R, data_length: u64, current_id: u16, next_same_id: bool, last_packet: bool, ) -> Result<u16>where W: AsyncWrite + Unpin + ?Sized, R: AsyncRead + Unpin + ?Sized,",
+      "methods": []
+    },
+    {
+      "path": "network::dss::write_external_lob_dss",
+      "kind": "fn",
+      "declaration": "pub async fn write_external_lob_dss<W, R>( destination: &mut W, source: &mut R, data_length: u64, current_id: u16, next_same_id: bool, last_packet: bool, ) -> Result<u16>where W: AsyncWrite + Unpin + ?Sized, R: AsyncRead + Unpin + ?Sized,",
+      "methods": []
+    },
+    {
+      "path": "network::pool::Db2Pool",
+      "kind": "struct",
+      "declaration": "pub struct Db2Pool { /* private fields */ }",
+      "methods": [
+        "pub async fn acquire(&self) -> Result<Db2PooledSession, Db2Error>",
+        "pub async fn close(&self) -> Result<(), Db2Error>",
+        "pub async fn execute(&self, sql: &str) -> Result<i64, Db2Error>",
+        "pub async fn execute_admin_command( &self, command: &str, ) -> Result<i64, Db2Error>",
+        "pub async fn execute_batch_with_blob_streams( &self, sql: &str, parameter_sets: &mut [Vec<Db2InputParameter<'_>>], ) -> Result<i64, Db2BatchError>",
+        "pub async fn execute_batch_with_params( &self, sql: &str, parameter_sets: &[Vec<Db2Value>], ) -> Result<i64, Db2BatchError>",
+        "pub async fn execute_with_blob_streams( &self, sql: &str, parameters: &mut [Db2InputParameter<'_>], ) -> Result<i64, Db2Error>",
+        "pub async fn execute_with_params( &self, sql: &str, parameters: &[Db2Value], ) -> Result<i64, Db2Error>",
+        "pub async fn query(&self, sql: &str) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_with_blob_streams( &self, sql: &str, parameters: &mut [Db2InputParameter<'_>], ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_with_params( &self, sql: &str, parameters: &[Db2Value], ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn shutdown(&self, budget: Duration) -> Result<(), Db2Error>",
+        "pub fn connect_dsn(dsn: &str, max_connections: usize) -> Result<Self, Db2Error>",
+        "pub fn idle_session_count(&self) -> usize",
+        "pub fn is_closed(&self) -> bool",
+        "pub fn new(config: Config, max_connections: usize) -> Result<Self, Db2Error>",
+        "pub fn new_with_options( config: Config, options: Db2PoolOptions, reset_policy: PoolResetPolicy, ) -> Result<Self, Db2Error>",
+        "pub fn new_with_reset_policy( config: Config, max_connections: usize, reset_policy: PoolResetPolicy, ) -> Result<Self, Db2Error>",
+        "pub fn session_count(&self) -> usize",
+        "pub fn waiting_count(&self) -> usize"
+      ]
+    },
+    {
+      "path": "network::pool::Db2PooledSession",
+      "kind": "struct",
+      "declaration": "pub struct Db2PooledSession { /* private fields */ }",
+      "methods": [
+        "pub async fn release(self) -> Result<(), Db2Error>"
+      ]
+    },
+    {
+      "path": "network::pool::Db2PoolOptions",
+      "kind": "struct",
+      "declaration": "pub struct Db2PoolOptions { pub max_connections: usize, pub max_waiters: usize, pub acquire_timeout: Duration, pub connect_timeout: Duration, pub idle_timeout: Duration, pub max_lifetime: Duration, pub reap_interval: Duration, }",
+      "methods": []
+    },
+    {
+      "path": "network::pool::PoolResetPolicy",
+      "kind": "enum",
+      "declaration": "pub enum PoolResetPolicy { Strict, Tracked, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2BatchError",
+      "kind": "struct",
+      "declaration": "pub struct Db2BatchError { pub cause: Db2Error, pub failed_parameter_set_index: Option<usize>, pub completed_parameter_sets: usize, pub rows_affected: i64, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2BatchOptions",
+      "kind": "struct",
+      "declaration": "pub struct Db2BatchOptions { pub max_rows: usize, pub max_encoded_bytes: usize, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2ClientInfo",
+      "kind": "struct",
+      "declaration": "pub struct Db2ClientInfo { pub application_name: String, pub workstation_name: String, pub user_id: String, pub accounting: String, pub correlation_token: String, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2CommandContext",
+      "kind": "struct",
+      "declaration": "pub struct Db2CommandContext { pub user: Option<String>, pub client_info: Option<Db2ClientInfo>, }",
+      "methods": [
+        "pub fn with_client_info(self, info: Db2ClientInfo) -> Self",
+        "pub fn with_user(self, user: impl Into<String>) -> Self"
+      ]
+    },
+    {
+      "path": "network::session::Db2CommandOptions",
+      "kind": "struct",
+      "declaration": "pub struct Db2CommandOptions { pub timeout_ms: u64, pub interrupt_ack_timeout_ms: u64, pub cleanup_timeout_ms: u64, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2Error",
+      "kind": "struct",
+      "declaration": "pub struct Db2Error { pub kind: Db2ErrorKind, pub outcome: Db2OperationOutcome, pub message: String, pub sql_code: Option<i32>, pub sql_state: Option<String>, pub cleanup: Option<Box<Db2Error>>, }",
+      "methods": [
+        "pub fn new(kind: Db2ErrorKind, message: impl Into<String>) -> Self",
+        "pub fn other(message: String) -> Self",
+        "pub fn with_cleanup(self, cleanup: Db2Error) -> Self"
+      ]
+    },
+    {
+      "path": "network::session::Db2ErrorKind",
+      "kind": "enum",
+      "declaration": "#[non_exhaustive]pub enum Db2ErrorKind {  InvalidConfiguration, ConnectionClosed, DatabaseNotFound, AuthenticationFailed, AuthorizationFailed, ParameterConversion, SqlServer, ServerResponse, Transport, Protocol, ResourceLimit, Unsupported, PoolTimeout, PoolExhausted, Other, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2ExecutionResult",
+      "kind": "struct",
+      "declaration": "pub struct Db2ExecutionResult { pub rows_affected: i64, pub output_parameters: Vec<Db2Value>, pub result_sets: Vec<Db2ResultSet>, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2InputParameter",
+      "kind": "enum",
+      "declaration": "pub enum Db2InputParameter<'a> { Value(&'a Db2Value), BlobStream { source: &'a mut (dyn AsyncRead + Unpin + Send), length: u64, }, ClobStream { source: &'a mut (dyn AsyncRead + Unpin + Send), length: u64, }, DbClobStream { source: &'a mut (dyn AsyncRead + Unpin + Send), length: u64, }, XmlStream { source: &'a mut (dyn AsyncRead + Unpin + Send), length: u64, }, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2InsertResult",
+      "kind": "struct",
+      "declaration": "pub struct Db2InsertResult { pub rows_affected: i64, pub last_insert_id: i64, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2InterruptHandle",
+      "kind": "struct",
+      "declaration": "pub struct Db2InterruptHandle { /* private fields */ }",
+      "methods": [
+        "pub async fn interrupt(&self) -> Result<(), Db2Error>"
+      ]
+    },
+    {
+      "path": "network::session::Db2IsolationLevel",
+      "kind": "enum",
+      "declaration": "pub enum Db2IsolationLevel { Unspecified, UncommittedRead, CursorStability, ReadStability, RepeatableRead, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2LobEncoding",
+      "kind": "enum",
+      "declaration": "pub enum Db2LobEncoding { Binary, Utf8, Utf16Be, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2LobReader",
+      "kind": "struct",
+      "declaration": "pub struct Db2LobReader<'reader, 'session> { /* private fields */ }",
+      "methods": [
+        "pub async fn close(self) -> Result<(), Db2Error>",
+        "pub async fn next_chunk(&mut self) -> Result<Option<Vec<u8>>, Db2Error>",
+        "pub fn byte_length(&self) -> u64"
+      ]
+    },
+    {
+      "path": "network::session::Db2LobValue",
+      "kind": "struct",
+      "declaration": "pub struct Db2LobValue { pub byte_length: u64, pub sql_type: u8, pub encoding: Db2LobEncoding, /* private fields */ }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2Parameter",
+      "kind": "struct",
+      "declaration": "pub struct Db2Parameter { pub value: Db2Value, pub direction: Db2ParameterDirection, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2ParameterDirection",
+      "kind": "enum",
+      "declaration": "pub enum Db2ParameterDirection { Input, Output, InputOutput, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2ProcedureReader",
+      "kind": "struct",
+      "declaration": "pub struct Db2ProcedureReader<'session> { /* private fields */ }",
+      "methods": [
+        "pub async fn close(self) -> Result<Db2ProcedureResult, Db2Error>",
+        "pub async fn finish(self) -> Result<Db2ProcedureResult, Db2Error>",
+        "pub async fn next(&mut self) -> Result<Option<Vec<Db2Value>>, Db2Error>",
+        "pub async fn next_result_set(&mut self) -> Result<bool, Db2Error>",
+        "pub fn columns(&self) -> &[ColumnDescription]",
+        "pub fn output_parameters(&self) -> Option<&[Db2Value]>",
+        "pub fn result_set_index(&self) -> Option<usize>"
+      ]
+    },
+    {
+      "path": "network::session::Db2ProcedureResult",
+      "kind": "struct",
+      "declaration": "pub struct Db2ProcedureResult { pub rows_affected: i64, pub output_parameters: Vec<Db2Value>, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2QueryResult",
+      "kind": "struct",
+      "declaration": "pub struct Db2QueryResult { pub columns: Vec<ColumnDescription>, pub rows: Vec<Vec<Db2Value>>, pub result_sets: Vec<Db2ResultSet>, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2ResultSet",
+      "kind": "struct",
+      "declaration": "pub struct Db2ResultSet { pub columns: Vec<ColumnDescription>, pub rows: Vec<Vec<Db2Value>>, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2RowReader",
+      "kind": "struct",
+      "declaration": "pub struct Db2RowReader<'a> { /* private fields */ }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2RowRef",
+      "kind": "struct",
+      "declaration": "pub struct Db2RowRef<'a> { /* private fields */ }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2Session",
+      "kind": "struct",
+      "declaration": "pub struct Db2Session { /* private fields */ }",
+      "methods": [
+        "pub async fn apply_command_context( &mut self, context: &Db2CommandContext, ) -> Result<(), Db2Error>",
+        "pub async fn begin_transaction_with_isolation( &mut self, isolation: Db2IsolationLevel, ) -> Result<Db2Transaction<'_>, Db2Error>",
+        "pub async fn call_procedure_stream<'session>( &'session mut self, statement: &Db2Statement, parameters: &[Db2Parameter], ) -> Result<Db2ProcedureReader<'session>, Db2Error>",
+        "pub async fn call_procedure_stream_with_options<'session>( &'session mut self, statement: &Db2Statement, parameters: &[Db2Parameter], options: Db2CommandOptions, ) -> Result<Db2ProcedureReader<'session>, Db2Error>",
+        "pub async fn close(&mut self) -> Result<(), Db2Error>",
+        "pub async fn commit(&mut self) -> Result<(), Db2Error>",
+        "pub async fn connect(config: Config) -> Result<Self, Db2Error>",
+        "pub async fn connect_dsn(dsn: &str) -> Result<Self, Db2Error>",
+        "pub async fn execute(&mut self, sql: &str) -> Result<i64, Db2Error>",
+        "pub async fn execute_admin_command( &mut self, command: &str, ) -> Result<i64, Db2Error>",
+        "pub async fn execute_batch_with_blob_streams( &mut self, sql: &str, parameter_sets: &mut [Vec<Db2InputParameter<'_>>], ) -> Result<i64, Db2BatchError>",
+        "pub async fn execute_batch_with_blob_streams_and_options( &mut self, sql: &str, parameter_sets: &mut [Vec<Db2InputParameter<'_>>], options: Db2CommandOptions, ) -> Result<i64, Db2BatchError>",
+        "pub async fn execute_batch_with_params( &mut self, sql: &str, parameter_sets: &[Vec<Db2Value>], ) -> Result<i64, Db2BatchError>",
+        "pub async fn execute_batch_with_params_and_batch_options( &mut self, sql: &str, parameter_sets: &[Vec<Db2Value>], batch_options: Db2BatchOptions, ) -> Result<i64, Db2BatchError>",
+        "pub async fn execute_batch_with_params_and_options( &mut self, sql: &str, parameter_sets: &[Vec<Db2Value>], options: Db2CommandOptions, ) -> Result<i64, Db2BatchError>",
+        "pub async fn execute_batch_with_params_and_options_and_limits( &mut self, sql: &str, parameter_sets: &[Vec<Db2Value>], command_options: Db2CommandOptions, batch_options: Db2BatchOptions, ) -> Result<i64, Db2BatchError>",
+        "pub async fn execute_insert( &mut self, sql: &str, ) -> Result<Db2InsertResult, Db2Error>",
+        "pub async fn execute_insert_prepared( &mut self, statement: &Db2Statement, parameters: &[Db2Value], ) -> Result<Db2InsertResult, Db2Error>",
+        "pub async fn execute_insert_with_blob_streams( &mut self, sql: &str, parameters: &mut [Db2InputParameter<'_>], ) -> Result<Db2InsertResult, Db2Error>",
+        "pub async fn execute_insert_with_params( &mut self, sql: &str, parameters: &[Db2Value], ) -> Result<Db2InsertResult, Db2Error>",
+        "pub async fn execute_prepared( &mut self, statement: &Db2Statement, parameters: &[Db2Value], ) -> Result<i64, Db2Error>",
+        "pub async fn execute_prepared_with_blob_streams( &mut self, statement: &Db2Statement, parameters: &mut [Db2InputParameter<'_>], ) -> Result<i64, Db2Error>",
+        "pub async fn execute_prepared_with_blob_streams_and_options( &mut self, statement: &Db2Statement, parameters: &mut [Db2InputParameter<'_>], options: Db2CommandOptions, ) -> Result<i64, Db2Error>",
+        "pub async fn execute_prepared_with_options( &mut self, statement: &Db2Statement, parameters: &[Db2Value], options: Db2CommandOptions, ) -> Result<i64, Db2Error>",
+        "pub async fn execute_prepared_with_outputs( &mut self, statement: &Db2Statement, parameters: &[Db2Parameter], ) -> Result<Db2ExecutionResult, Db2Error>",
+        "pub async fn execute_prepared_with_outputs_and_options( &mut self, statement: &Db2Statement, parameters: &[Db2Parameter], options: Db2CommandOptions, ) -> Result<Db2ExecutionResult, Db2Error>",
+        "pub async fn execute_with_blob_streams( &mut self, sql: &str, parameters: &mut [Db2InputParameter<'_>], ) -> Result<i64, Db2Error>",
+        "pub async fn execute_with_blob_streams_and_options( &mut self, sql: &str, parameters: &mut [Db2InputParameter<'_>], options: Db2CommandOptions, ) -> Result<i64, Db2Error>",
+        "pub async fn execute_with_context( &mut self, sql: &str, context: &Db2CommandContext, ) -> Result<i64, Db2Error>",
+        "pub async fn execute_with_options( &mut self, sql: &str, options: Db2CommandOptions, ) -> Result<i64, Db2Error>",
+        "pub async fn execute_with_params( &mut self, sql: &str, parameters: &[Db2Value], ) -> Result<i64, Db2Error>",
+        "pub async fn execute_with_params_and_context( &mut self, sql: &str, parameters: &[Db2Value], context: &Db2CommandContext, ) -> Result<i64, Db2Error>",
+        "pub async fn execute_with_params_and_options( &mut self, sql: &str, parameters: &[Db2Value], options: Db2CommandOptions, ) -> Result<i64, Db2Error>",
+        "pub async fn import_rows_from<F>( &mut self, source: &mut Db2RowReader<'_>, target: &Db2ImportTarget, policy: Db2ImportPolicy, before_commit: F, ) -> Result<Db2ImportProgress, Db2ImportError>where F: FnMut(Db2ImportProgress) -> Result<(), Db2Error>,",
+        "pub async fn import_rows_with_options<F>( &mut self, source: &mut Db2RowReader<'_>, target: &Db2ImportTarget, options: Db2ImportOptions, before_commit: F, ) -> Result<Db2ImportProgress, Db2ImportError>where F: FnMut(Db2ImportProgress) -> Result<(), Db2Error>,",
+        "pub async fn ping(&mut self) -> Result<(), Db2Error>",
+        "pub async fn prepare(&mut self, sql: &str) -> Result<Db2Statement, Db2Error>",
+        "pub async fn prepare_with_options( &mut self, sql: &str, options: Db2CommandOptions, ) -> Result<Db2Statement, Db2Error>",
+        "pub async fn query(&mut self, sql: &str) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_prepared( &mut self, statement: &Db2Statement, parameters: &[Db2Value], ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_prepared_stream<'a>( &'a mut self, statement: &Db2Statement, parameters: &[Db2Value], ) -> Result<Db2RowReader<'a>, Db2Error>",
+        "pub async fn query_prepared_stream_with_blob_streams<'a>( &'a mut self, statement: &Db2Statement, parameters: &mut [Db2InputParameter<'_>], ) -> Result<Db2RowReader<'a>, Db2Error>",
+        "pub async fn query_prepared_stream_with_options<'a>( &'a mut self, statement: &Db2Statement, parameters: &[Db2Value], options: Db2CommandOptions, ) -> Result<Db2RowReader<'a>, Db2Error>",
+        "pub async fn query_prepared_with_blob_streams( &mut self, statement: &Db2Statement, parameters: &mut [Db2InputParameter<'_>], ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_prepared_with_blob_streams_and_options( &mut self, statement: &Db2Statement, parameters: &mut [Db2InputParameter<'_>], options: Db2CommandOptions, ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_prepared_with_options( &mut self, statement: &Db2Statement, parameters: &[Db2Value], options: Db2CommandOptions, ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_stream<'a>( &'a mut self, sql: &str, ) -> Result<Db2RowReader<'a>, Db2Error>",
+        "pub async fn query_stream_with_blob_streams<'a>( &'a mut self, sql: &str, parameters: &mut [Db2InputParameter<'_>], ) -> Result<Db2RowReader<'a>, Db2Error>",
+        "pub async fn query_stream_with_blob_streams_and_options<'a>( &'a mut self, sql: &str, parameters: &mut [Db2InputParameter<'_>], options: Db2CommandOptions, ) -> Result<Db2RowReader<'a>, Db2Error>",
+        "pub async fn query_stream_with_options<'a>( &'a mut self, sql: &str, options: Db2CommandOptions, ) -> Result<Db2RowReader<'a>, Db2Error>",
+        "pub async fn query_stream_with_params<'a>( &'a mut self, sql: &str, parameters: &[Db2Value], ) -> Result<Db2RowReader<'a>, Db2Error>",
+        "pub async fn query_stream_with_params_and_options<'a>( &'a mut self, sql: &str, parameters: &[Db2Value], options: Db2CommandOptions, ) -> Result<Db2RowReader<'a>, Db2Error>",
+        "pub async fn query_with_blob_streams( &mut self, sql: &str, parameters: &mut [Db2InputParameter<'_>], ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_with_blob_streams_and_options( &mut self, sql: &str, parameters: &mut [Db2InputParameter<'_>], options: Db2CommandOptions, ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_with_context( &mut self, sql: &str, context: &Db2CommandContext, ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_with_options( &mut self, sql: &str, options: Db2CommandOptions, ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_with_params( &mut self, sql: &str, parameters: &[Db2Value], ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_with_params_and_context( &mut self, sql: &str, parameters: &[Db2Value], context: &Db2CommandContext, ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_with_params_and_options( &mut self, sql: &str, parameters: &[Db2Value], options: Db2CommandOptions, ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn reset_client_info( &mut self, info: Db2ClientInfo, ) -> Result<(), Db2Error>",
+        "pub async fn rollback(&mut self) -> Result<(), Db2Error>",
+        "pub async fn set_client_info( &mut self, info: Db2ClientInfo, ) -> Result<(), Db2Error>",
+        "pub async fn set_current_isolation( &mut self, isolation: Db2IsolationLevel, ) -> Result<(), Db2Error>",
+        "pub async fn set_current_schema(&mut self, schema: &str) -> Result<(), Db2Error>",
+        "pub async fn switch_user(&mut self, user: &str) -> Result<(), Db2Error>",
+        "pub async fn switch_user_with_password( &mut self, user: &str, password: &str, ) -> Result<(), Db2Error>",
+        "pub fn auto_commit(&self) -> bool",
+        "pub fn begin_transaction(&mut self) -> Result<Db2Transaction<'_>, Db2Error>",
+        "pub fn clear_warning_handler(&mut self)",
+        "pub fn client_info(&self) -> Db2ClientInfo",
+        "pub fn client_info_matches(&self, info: &Db2ClientInfo) -> bool",
+        "pub fn current_schema(&self) -> Option<&str>",
+        "pub fn current_session_user(&self) -> &str",
+        "pub fn interrupt_handle(&self) -> Result<Db2InterruptHandle, Db2Error>",
+        "pub fn is_closed(&self) -> bool",
+        "pub fn set_auto_commit(&mut self, enabled: bool)",
+        "pub fn set_warning_handler<F>(&mut self, handler: F)where F: Fn(Db2Warning) + Send + Sync + 'static,"
+      ]
+    },
+    {
+      "path": "network::session::Db2Statement",
+      "kind": "struct",
+      "declaration": "pub struct Db2Statement { pub sql: String, pub output_columns: Vec<ColumnDescription>, pub parameter_columns: Vec<ColumnDescription>, }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2Transaction",
+      "kind": "struct",
+      "declaration": "pub struct Db2Transaction<'a> { /* private fields */ }",
+      "methods": [
+        "pub async fn commit(self) -> Result<(), Db2Error>",
+        "pub async fn execute(&mut self, sql: &str) -> Result<i64, Db2Error>",
+        "pub async fn execute_batch_with_blob_streams( &mut self, sql: &str, parameter_sets: &mut [Vec<Db2InputParameter<'_>>], ) -> Result<i64, Db2BatchError>",
+        "pub async fn execute_insert( &mut self, sql: &str, ) -> Result<Db2InsertResult, Db2Error>",
+        "pub async fn execute_insert_with_params( &mut self, sql: &str, parameters: &[Db2Value], ) -> Result<Db2InsertResult, Db2Error>",
+        "pub async fn execute_with_blob_streams( &mut self, sql: &str, parameters: &mut [Db2InputParameter<'_>], ) -> Result<i64, Db2Error>",
+        "pub async fn execute_with_params( &mut self, sql: &str, parameters: &[Db2Value], ) -> Result<i64, Db2Error>",
+        "pub async fn query(&mut self, sql: &str) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_with_blob_streams( &mut self, sql: &str, parameters: &mut [Db2InputParameter<'_>], ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn query_with_params( &mut self, sql: &str, parameters: &[Db2Value], ) -> Result<Db2QueryResult, Db2Error>",
+        "pub async fn rollback(self) -> Result<(), Db2Error>"
+      ]
+    },
+    {
+      "path": "network::session::Db2Value",
+      "kind": "enum",
+      "declaration": "pub enum Db2Value { Null, Boolean(bool), Integer(i64), Float(f64), Decimal(String), Text(String), Bytes(Vec<u8>), Lob(Db2LobValue), // some variants omitted }",
+      "methods": []
+    },
+    {
+      "path": "network::session::Db2ValueRef",
+      "kind": "enum",
+      "declaration": "pub enum Db2ValueRef<'a> { Null, Boolean(bool), Integer(i64), Float(f64), Decimal(&'a str), Text(&'a str), Bytes(&'a [u8]), Lob(Db2LobValue), ProgressiveLobReference { length: u64, reference: u64, }, }",
+      "methods": []
+    },
+    {
+      "path": "network::stream::Db2DssStream",
+      "kind": "struct",
+      "declaration": "pub struct Db2DssStream<'a, R> { pub header: DssHeader, pub codepoint: CodePoint, /* private fields */ }",
+      "methods": []
+    },
+    {
+      "path": "replay::checksum",
+      "kind": "fn",
+      "declaration": "pub fn checksum(rows: usize) -> u64",
+      "methods": []
+    },
+    {
+      "path": "replay::connect_replay",
+      "kind": "fn",
+      "declaration": "pub async fn connect_replay(port: u16) -> Db2Session",
+      "methods": []
+    },
+    {
+      "path": "replay::drain_stream_checksum",
+      "kind": "fn",
+      "declaration": "pub async fn drain_stream_checksum( session: &mut Db2Session, sql: &str, ) -> (usize, u64)",
+      "methods": []
+    },
+    {
+      "path": "replay::encode_int_rows",
+      "kind": "fn",
+      "declaration": "pub fn encode_int_rows(columns: usize, start: usize, end: usize) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "replay::qrydsc_integer",
+      "kind": "fn",
+      "declaration": "pub fn qrydsc_integer(columns: usize) -> Vec<u8>",
+      "methods": []
+    },
+    {
+      "path": "replay::ReplayFixture",
+      "kind": "enum",
+      "declaration": "pub enum ReplayFixture { Int, Mixed, Wide, Discard, Small, }",
+      "methods": [
+        "pub fn bench_rows(self) -> usize",
+        "pub fn columns(self) -> usize",
+        "pub fn name(self) -> &'static str",
+        "pub fn reference_rows(self) -> usize"
+      ]
+    },
+    {
+      "path": "replay::serve_query_blocks",
+      "kind": "fn",
+      "declaration": "pub async fn serve_query_blocks( socket: &mut TcpStream, qrydsc: Vec<u8>, blocks: Vec<Vec<u8>>, )",
+      "methods": []
+    },
+    {
+      "path": "replay::spawn_replay_server",
+      "kind": "fn",
+      "declaration": "pub async fn spawn_replay_server( fixture: ReplayFixture, rows: usize, block_size: usize, ) -> (u16, JoinHandle<()>)",
+      "methods": []
+    },
+    {
+      "path": "replay::split_blocks",
+      "kind": "fn",
+      "declaration": "pub fn split_blocks(data: &[u8], block_size: usize) -> Vec<Vec<u8>>",
+      "methods": []
+    },
+    {
+      "path": "resources::CHUNK_BYTES",
+      "kind": "constant",
+      "declaration": "pub const CHUNK_BYTES: usize = _; // 65_536usize",
+      "methods": []
+    },
+    {
+      "path": "resources::Db2ResourceBudget",
+      "kind": "struct",
+      "declaration": "pub struct Db2ResourceBudget { /* private fields */ }",
+      "methods": [
+        "pub fn new(limit: u64) -> Result<Arc<Self>, Db2Error>",
+        "pub fn reservation(self: &Arc<Self>) -> Db2ResourceReservation",
+        "pub fn used_bytes(&self) -> u64"
+      ]
+    },
+    {
+      "path": "resources::Db2ResourceReservation",
+      "kind": "struct",
+      "declaration": "pub struct Db2ResourceReservation { /* private fields */ }",
+      "methods": [
+        "pub fn grow(&mut self, bytes: u64) -> Result<(), Db2Error>"
+      ]
+    },
+    {
+      "path": "resources::MAX_MATERIALIZED_LOB_BYTES",
+      "kind": "constant",
+      "declaration": "pub const MAX_MATERIALIZED_LOB_BYTES: usize = _; // 16_777_216usize",
+      "methods": []
+    },
+    {
+      "path": "resources::MAX_MATERIALIZED_RESULT_BYTES",
+      "kind": "constant",
+      "declaration": "pub const MAX_MATERIALIZED_RESULT_BYTES: usize = _; // 33_554_432usize",
+      "methods": []
+    },
+    {
+      "path": "resources::MAX_STREAMED_LOB_BYTES",
+      "kind": "constant",
+      "declaration": "pub const MAX_STREAMED_LOB_BYTES: u64 = _; // 1_073_741_824u64",
+      "methods": []
+    },
+    {
+      "path": "security::calculate_public_key",
+      "kind": "fn",
+      "declaration": "pub fn calculate_public_key( private_key: &[u8; 32], ) -> Result<[u8; 32], Secmec9Error>",
+      "methods": []
+    },
+    {
+      "path": "security::calculate_session_key",
+      "kind": "fn",
+      "declaration": "pub fn calculate_session_key( peer_public_key: &[u8], private_key: &[u8; 32], ) -> Result<[u8; 32], Secmec9Error>",
+      "methods": []
+    },
+    {
+      "path": "security::encrypt",
+      "kind": "fn",
+      "declaration": "pub fn encrypt( plaintext: &[u8], server_public_key: &[u8], private_key: &[u8; 32], ) -> Result<Vec<u8>, Secmec9Error>",
+      "methods": []
+    },
+    {
+      "path": "security::generate_private_key",
+      "kind": "fn",
+      "declaration": "pub fn generate_private_key() -> Result<[u8; 32], Secmec9Error>",
+      "methods": []
+    },
+    {
+      "path": "security::Secmec9Error",
+      "kind": "enum",
+      "declaration": "pub enum Secmec9Error { InvalidPrivateKey, InvalidPublicKey, ShortServerToken, Cipher(String), }",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::BIGINT",
+      "kind": "constant",
+      "declaration": "pub const BIGINT: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::BINARY",
+      "kind": "constant",
+      "declaration": "pub const BINARY: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::BLOB",
+      "kind": "constant",
+      "declaration": "pub const BLOB: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::BLOBLOCATOR",
+      "kind": "constant",
+      "declaration": "pub const BLOBLOCATOR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::BOOLEAN",
+      "kind": "constant",
+      "declaration": "pub const BOOLEAN: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::CHAR",
+      "kind": "constant",
+      "declaration": "pub const CHAR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::CLOB",
+      "kind": "constant",
+      "declaration": "pub const CLOB: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::CLOBLOCATOR",
+      "kind": "constant",
+      "declaration": "pub const CLOBLOCATOR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::CSTR",
+      "kind": "constant",
+      "declaration": "pub const CSTR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::DATALINK",
+      "kind": "constant",
+      "declaration": "pub const DATALINK: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::DATE",
+      "kind": "constant",
+      "declaration": "pub const DATE: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::DBCLOB",
+      "kind": "constant",
+      "declaration": "pub const DBCLOB: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::DBCLOBLOCATOR",
+      "kind": "constant",
+      "declaration": "pub const DBCLOBLOCATOR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::DECFLOAT",
+      "kind": "constant",
+      "declaration": "pub const DECFLOAT: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::DECIMAL",
+      "kind": "constant",
+      "declaration": "pub const DECIMAL: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::FAKENUDT",
+      "kind": "constant",
+      "declaration": "pub const FAKENUDT: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::FAKEUDT",
+      "kind": "constant",
+      "declaration": "pub const FAKEUDT: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::FLOAT",
+      "kind": "constant",
+      "declaration": "pub const FLOAT: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::GRAPHIC",
+      "kind": "constant",
+      "declaration": "pub const GRAPHIC: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::INTEGER",
+      "kind": "constant",
+      "declaration": "pub const INTEGER: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::LONG",
+      "kind": "constant",
+      "declaration": "pub const LONG: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::LONGRAPH",
+      "kind": "constant",
+      "declaration": "pub const LONGRAPH: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::LSTR",
+      "kind": "constant",
+      "declaration": "pub const LSTR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NBIGINT",
+      "kind": "constant",
+      "declaration": "pub const NBIGINT: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NBINARY",
+      "kind": "constant",
+      "declaration": "pub const NBINARY: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NBLOB",
+      "kind": "constant",
+      "declaration": "pub const NBLOB: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NBLOBLOCATOR",
+      "kind": "constant",
+      "declaration": "pub const NBLOBLOCATOR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NBOOLEAN",
+      "kind": "constant",
+      "declaration": "pub const NBOOLEAN: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NCHAR",
+      "kind": "constant",
+      "declaration": "pub const NCHAR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NCLOB",
+      "kind": "constant",
+      "declaration": "pub const NCLOB: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NCLOBLOCATOR",
+      "kind": "constant",
+      "declaration": "pub const NCLOBLOCATOR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NCSTR",
+      "kind": "constant",
+      "declaration": "pub const NCSTR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NDATALINK",
+      "kind": "constant",
+      "declaration": "pub const NDATALINK: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NDATE",
+      "kind": "constant",
+      "declaration": "pub const NDATE: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NDBCLOB",
+      "kind": "constant",
+      "declaration": "pub const NDBCLOB: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NDBCLOBLOCATOR",
+      "kind": "constant",
+      "declaration": "pub const NDBCLOBLOCATOR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NDECFLOAT",
+      "kind": "constant",
+      "declaration": "pub const NDECFLOAT: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NDECIMAL",
+      "kind": "constant",
+      "declaration": "pub const NDECIMAL: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NFLOAT",
+      "kind": "constant",
+      "declaration": "pub const NFLOAT: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NGRAPHIC",
+      "kind": "constant",
+      "declaration": "pub const NGRAPHIC: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NINTEGER",
+      "kind": "constant",
+      "declaration": "pub const NINTEGER: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NLONG",
+      "kind": "constant",
+      "declaration": "pub const NLONG: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NLONGRAPH",
+      "kind": "constant",
+      "declaration": "pub const NLONGRAPH: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NLSTR",
+      "kind": "constant",
+      "declaration": "pub const NLSTR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NNUMERIC",
+      "kind": "constant",
+      "declaration": "pub const NNUMERIC: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NROWID",
+      "kind": "constant",
+      "declaration": "pub const NROWID: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NSMALL",
+      "kind": "constant",
+      "declaration": "pub const NSMALL: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NTIME",
+      "kind": "constant",
+      "declaration": "pub const NTIME: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NTIMESTAMP",
+      "kind": "constant",
+      "declaration": "pub const NTIMESTAMP: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NUMERIC",
+      "kind": "constant",
+      "declaration": "pub const NUMERIC: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NVARBINARY",
+      "kind": "constant",
+      "declaration": "pub const NVARBINARY: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NVARCHAR",
+      "kind": "constant",
+      "declaration": "pub const NVARCHAR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NVARGRAPH",
+      "kind": "constant",
+      "declaration": "pub const NVARGRAPH: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NXML",
+      "kind": "constant",
+      "declaration": "pub const NXML: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::NZONED",
+      "kind": "constant",
+      "declaration": "pub const NZONED: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::ROWID",
+      "kind": "constant",
+      "declaration": "pub const ROWID: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::SMALL",
+      "kind": "constant",
+      "declaration": "pub const SMALL: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::SqlType",
+      "kind": "struct",
+      "declaration": "#[repr(transparent)]pub struct SqlType(pub u16);",
+      "methods": [
+        "pub fn name(self) -> String"
+      ]
+    },
+    {
+      "path": "types::sqltype::TIME",
+      "kind": "constant",
+      "declaration": "pub const TIME: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::TIMESTAMP",
+      "kind": "constant",
+      "declaration": "pub const TIMESTAMP: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::VARBINARY",
+      "kind": "constant",
+      "declaration": "pub const VARBINARY: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::VARCHAR",
+      "kind": "constant",
+      "declaration": "pub const VARCHAR: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::VARGRAPH",
+      "kind": "constant",
+      "declaration": "pub const VARGRAPH: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::XML",
+      "kind": "constant",
+      "declaration": "pub const XML: SqlType;",
+      "methods": []
+    },
+    {
+      "path": "types::sqltype::ZONED",
+      "kind": "constant",
+      "declaration": "pub const ZONED: SqlType;",
+      "methods": []
+    }
+  ],
+  "digest": "78ea087249e0bd316f89e530700816aab7a69ba9861f4ca203c5441d1c3b840a"
+}

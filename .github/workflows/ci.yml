@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  platform-smoke:
+    name: Platform smoke (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+
+      - name: Compile all targets
+        run: cargo check --locked --all-targets
+
+      - name: SECMEC 9 secure entropy smoke
+        run: cargo test --locked --lib secmec9_handshake_exchanges_keys_in_accsec_and_encrypts_userid_and_password
+
+      - name: Cancellation/session reuse smoke
+        run: cargo test --locked --lib network::session::tests::interrupt_handle_cancels_pending_progressive_lob_chunk_and_reuses_session -- --exact
+
+      - name: Deterministic replay infrastructure smoke
+        run: cargo test --locked --test replay_infrastructure
+
+      - name: Early-discard replay smoke
+        run: cargo test --locked --test replay_discard
+
+  offline:
+    name: Build, offline tests and package checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+          components: rustfmt, clippy
+
+      - name: Fetch locked dependency graph
+        run: cargo fetch --locked
+
+      - name: Check no committed key material
+        run: python3 tools/sbom/check_no_committed_keys.py
+
+      - name: Generate ephemeral TLS test fixtures
+        run: ./scripts/generate-test-tls-fixtures.sh
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+      - name: Offline unit and protocol tests
+        run: cargo test --locked --offline
+
+      - name: Build examples
+        run: cargo build --examples --locked --offline
+
+      - name: Generate rustdoc
+        run: cargo doc --no-deps --offline --quiet
+
+      - name: Check API surface
+        run: node tools/api/generate-rust-surface.cjs --check
+
+      - name: Test API surface parser
+        run: node --test tools/api/generate-rust-surface.test.cjs
+
+      - name: Generate SBOM
+        run: python3 tools/sbom/generate_rust_sbom.py
+
+      - name: Assemble third-party notices
+        run: python3 tools/sbom/assemble_rust_notices.py
+
+      - name: Check crate contents
+        run: python3 tools/sbom/check_package_contents.py
+
+      - name: Verify crate package
+        run: cargo package --locked --offline
+
+  live-smoke:
+    name: Db2 live smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+
+      - name: Run isolated Db2 smoke suite
+        run: ./scripts/test-db2-integration.sh
+
+  audit:
+    name: RustSec advisory scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      # --deny warnings also fails on unmaintained/yanked crates, which is how
+      # rustls-pemfile was caught and replaced with rustls-pki-types.
+      - name: Scan locked dependencies against the RustSec advisory database
+        run: cargo audit --deny warnings
+
+  ci-gate:
+    name: CI gate
+    if: always()
+    needs: [platform-smoke, offline, live-smoke, audit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all CI lanes
+        shell: bash
+        run: |
+          test '${{ needs.platform-smoke.result }}' = 'success'
+          test '${{ needs.offline.result }}' = 'success'
+          test '${{ needs.live-smoke.result }}' = 'success'
+          test '${{ needs.audit.result }}' = 'success'
