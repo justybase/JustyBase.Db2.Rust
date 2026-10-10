@@ -57,14 +57,12 @@ The maintained live qualification baseline is Db2 LUW 12.1.5 on Linux x64. Windo
 
 ## Installation
 
-No crates.io version has been published yet. Until the first release, use a local path dependency while developing from this repository:
-
 ```toml
 [dependencies]
-justybase-db2 = { path = "../JustyBase.Db2.Rust" }
+justybase-db2 = "0.1.0-alpha.1"
 ```
 
-After publication, the dependency will use the crates.io version instead. In Rust source code import the crate as `justybase_db2`.
+In Rust source code import the crate as `justybase_db2`.
 
 ## Quick start
 
