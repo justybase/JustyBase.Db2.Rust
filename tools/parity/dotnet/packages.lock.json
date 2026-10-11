@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "Net.IBM.Data.Db2-lnx": {
+        "type": "Direct",
+        "requested": "[10.0.0.300, )",
+        "resolved": "10.0.0.300",
+        "contentHash": "8oWivoJgeLC3KDt3MtkdW5/ZSQVoEjmA60BQQK7gz+Bn3WuSdDej336zVkZ2pHQIsCpEXqsjXMeeBIzrXCLCWw=="
+      }
+    }
+  }
+}

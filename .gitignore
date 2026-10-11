@@ -2,6 +2,9 @@
 /release-out/
 /sbom-out/
 /tests/fixtures/tls/
+/tools/parity/dotnet/bin/
+/tools/parity/dotnet/obj/
+/tools/parity/jdbc/target/
 __pycache__/
 *.log
 *.profraw

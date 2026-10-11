@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup>
+  <ItemGroup>
+    <!-- IBM ships one NuGet package per OS; the managed API is identical, only
+         the bundled native clidriver differs. Linux needs -lnx (libdb2.so);
+         the Windows package has no Linux native library and fails at runtime
+         with DllNotFoundException for db2app64.dll. -->
+    <PackageReference Include="Net.IBM.Data.Db2" Version="10.0.0.300" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <PackageReference Include="Net.IBM.Data.Db2-lnx" Version="10.0.0.300" Condition="$([MSBuild]::IsOSPlatform('Linux'))" />
+    <PackageReference Include="Net.IBM.Data.Db2-osx" Version="10.0.0.300" Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
+  </ItemGroup>
+</Project>

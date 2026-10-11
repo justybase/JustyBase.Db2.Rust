@@ -428,6 +428,7 @@ dependencies = [
  "ring",
  "rustls-native-certs",
  "rustls-pki-types",
+ "serde_json",
  "stats_alloc",
  "tempfile",
  "tokio",

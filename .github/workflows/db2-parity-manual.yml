@@ -1,0 +1,48 @@
+name: Db2 Cross-Driver Parity
+
+on:
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Run all cases (otherwise run the parity smoke tier)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Run isolated Db2 cross-driver parity
+        run: |
+          if [ '${{ inputs.full }}' = 'true' ]; then ./scripts/test-db2-integration.sh --parity-full; else ./scripts/test-db2-integration.sh --parity; fi
+      - name: Upload parity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db2-parity-report
+          path: |
+            target/db2-parity/report.txt
+            target/db2-parity/rust.jsonl
+            target/db2-parity/dotnet.jsonl
+            target/db2-parity/jcc.jsonl
+            target/db2-it-results/*.log
+          if-no-files-found: warn

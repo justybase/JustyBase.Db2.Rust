@@ -23,6 +23,26 @@ Every push/PR runs:
 
 The cross-platform jobs validate the Rust client path; only Linux x64 is currently live-qualified against Db2.
 
+## Public cross-driver parity
+
+Selected Db2 value, metadata, DML, transaction and error semantics are independently cross-checked against IBM's .NET and JCC providers and against canonical values produced directly by Db2. The public suite lives in `tests/parity/` and `tools/parity/`; it does not use the private `db2-conformance` repository or add provider dependencies to the Rust crate.
+
+The manual **Db2 Cross-Driver Parity** workflow runs against one isolated Db2 LUW 12.1.5 container and uploads a `db2-parity-report` artifact. Provider workers are pinned to `Net.IBM.Data.Db2-lnx` 10.0.0.300 (Linux, .NET 10; the Windows/macOS provider packages are `Net.IBM.Data.Db2`/`-osx` with the same version) and `com.ibm.db2:jcc` 12.1.5.0. The IBM binaries are downloaded from NuGet and Maven Central at run time and are not committed. To run locally, install Docker, Rust 1.98.1, .NET 10, Java 17 and Maven, then run `./scripts/test-db2-parity.sh`; use `./scripts/test-db2-integration.sh --parity-full` for the full manifest. The regular PR CI remains the Rust/live-smoke gate and does not download the IBM provider packages.
+
+| Area | Public parity coverage |
+| --- | --- |
+| Numeric and NULL values | Integer boundaries, REAL/DOUBLE, DECIMAL precision and scale, DECFLOAT, BOOLEAN |
+| Text and LOB | CHAR/VARCHAR padding, Unicode, GRAPHIC/VARGRAPHIC, small CLOB/DBCLOB/BLOB values, empty versus NULL |
+| Temporal and binary | DATE/TIME/TIMESTAMP(0/6/12), BINARY/VARBINARY/BLOB, hex and length expressions |
+| Server canonicalization | Db2 `HEX`, `LENGTH`, `VARCHAR`, `VARCHAR_FORMAT`, and `XMLSERIALIZE` expressions |
+| Prepared/DML | Prepared typed insert, insert-many, update/delete row counts and final table state |
+| Transactions and errors | Independent observer checks uncommitted/rolled-back/committed visibility; SQLCODE and SQLSTATE for syntax and missing-table errors |
+| Independent stacks | Rust DRDA, IBM .NET provider, IBM JCC; shared SQL cases and canonical JSON Lines |
+
+The current manifest has 55 reported cases: 52 deterministic read/canonicalization/error cases plus prepared DML/row-count/final-state and transaction-visibility checks (smoke tier: 27; full tier: 55). Error cases compare Db2 codes and states, not provider-formatted messages. This is a selected semantic cross-check, not exhaustive provider compatibility or IBM certification/support. Provider-specific CLR/Java types are not compatibility claims. Detailed parity reports record commit, server/client versions, pass counts and failing case IDs without credentials.
+
+This initial suite does not yet cover 64 KiB/1 MiB LOB transfer in both directions, stored procedure result/warning parity, or metadata nullability parity. The transaction case checks observer visibility within each provider's own transaction flow; it does not keep one provider's transaction open while a different provider reads it. Treat those areas as unqualified until added and run successfully.
+
 ## Full release qualification
 
 Before publishing a release candidate, the maintainer-run full qualification additionally covers:

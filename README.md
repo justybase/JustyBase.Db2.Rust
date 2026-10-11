@@ -148,6 +148,16 @@ The integration script starts an isolated pinned Db2 Community container and rem
 
 The alpha API is mechanically guarded in CI. See [API compatibility policy](API-COMPATIBILITY.md). Low-level protocol modules that are public for tooling/tests are not the preferred application API and may be reduced before 1.0.
 
+## Qualification
+
+Selected Db2 value semantics are cross-checked against the official IBM .NET provider, IBM JCC and server-side canonical Db2 expressions. The provider workers are independent test tools; this project is not IBM-certified. Run the manual suite with `./scripts/test-db2-parity.sh`. See [Qualification](docs/QUALIFICATION.md) for scope and limitations.
+
+```text
+Rust implementation ↔ real Db2 ↔ IBM .NET provider
+                         ↔ IBM JCC provider
+                         ↔ server-side canonical checks
+```
+
 ## Documentation
 
 - [Advanced driver guide](docs/DRIVER-GUIDE.md)
