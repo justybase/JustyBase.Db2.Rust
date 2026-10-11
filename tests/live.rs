@@ -5375,7 +5375,7 @@ async fn live_nullable_and_not_null_lob_descriptors_preserve_leading_zero_bytes(
         .execute_with_options(&format!("DROP TABLE {schema}.{table}"), options)
         .await;
 
-    let (query, call, reuse) = operation.unwrap();
+    let (query, call, reuse) = operation.unwrap_or_else(|error| panic!("LOB descriptor fixture operation failed: {error}"));
     assert_eq!(call.result_sets.len(), 1);
     for rows in [&query.rows, &call.result_sets[0].rows] {
         assert_eq!(rows[0][0], Db2Value::Integer(1));
