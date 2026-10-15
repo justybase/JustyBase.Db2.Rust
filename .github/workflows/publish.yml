@@ -1,0 +1,50 @@
+name: Publish crate
+
+# Manual crates.io publication. Defaults to a dry run; set `dry_run` to false to
+# publish for real. The crate is published from the commit this workflow runs
+# on, after the offline test suite and the registry dry-run pass. Publishing
+# is irreversible: a version can be yanked but never deleted or re-uploaded.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Verify and package only; do not upload to crates.io"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish justybase-db2 to crates.io
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+
+      - name: Fetch locked dependency graph
+        run: cargo fetch --locked
+
+      - name: Generate ephemeral TLS test fixtures
+        run: ./scripts/generate-test-tls-fixtures.sh
+
+      - name: Offline tests
+        run: cargo test --locked --offline
+
+      - name: Registry dry-run
+        run: cargo publish --dry-run --locked
+
+      - name: Publish to crates.io
+        if: ${{ !inputs.dry_run }}
+        run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
