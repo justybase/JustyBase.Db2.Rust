@@ -88,7 +88,7 @@ Use environment variables or a secret store for credentials. Do not embed produc
 
 ## TLS
 
-Use `db2s://` and configure a trusted CA/server certificate. IBM CLI-style key/value connection strings are supported for the documented subset, including `Security=SSL` and `SSLServerCertificate=...`. Unsupported security modes fail validation rather than silently falling back to plaintext.
+Use `db2s://` and configure a trusted CA/server certificate. IBM CLI-style key/value connection strings are supported for the documented subset, including `Security=SSL` and `SSLServerCertificate=...`. When a CA file is configured, it replaces the system trust store: only certificates in that file can validate the Db2 server. Unsupported security modes fail validation rather than silently falling back to plaintext.
 
 ## Prepared statements
 

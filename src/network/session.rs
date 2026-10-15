@@ -6557,30 +6557,41 @@ fn security_enum(value: u16) -> Result<SecurityMechanism, Db2Error> {
     }
 }
 
+/// Builds the trust store for server certificate validation. A configured CA file replaces the
+/// system roots entirely, so only that CA can vouch for the Db2 server.
+fn build_root_store(config: &Config) -> Result<RootCertStore, Db2Error> {
+    let mut roots = RootCertStore::empty();
+    if config.ssl_root_ca_path.is_empty() {
+        for cert in load_native_certs().certs {
+            roots.add(cert).map_err(|error| {
+                Db2Error::other(format!("invalid system TLS certificate: {error}"))
+            })?;
+        }
+        return Ok(roots);
+    }
+    let mut file = BufReader::new(File::open(&config.ssl_root_ca_path)?);
+    let certificates = CertificateDer::pem_reader_iter(&mut file)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| Db2Error::other(format!("failed to read Db2 CA certificate: {error}")))?;
+    if certificates.is_empty() {
+        return Err(Db2Error::other(format!(
+            "Db2 CA file contains no certificates: {}",
+            config.ssl_root_ca_path
+        )));
+    }
+    for cert in certificates {
+        roots
+            .add(cert)
+            .map_err(|error| Db2Error::other(format!("invalid Db2 CA certificate: {error}")))?;
+    }
+    Ok(roots)
+}
+
 async fn connect_tls(
     socket: TcpStream,
     config: &Config,
 ) -> Result<tokio_rustls::client::TlsStream<TcpStream>, Db2Error> {
-    let mut roots = RootCertStore::empty();
-    for cert in load_native_certs().certs {
-        roots
-            .add(cert)
-            .map_err(|error| Db2Error::other(format!("invalid system TLS certificate: {error}")))?;
-    }
-    if !config.ssl_root_ca_path.is_empty() {
-        let mut file = BufReader::new(File::open(&config.ssl_root_ca_path)?);
-        let certificates = CertificateDer::pem_reader_iter(&mut file)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| {
-                Db2Error::other(format!("failed to read Db2 CA certificate: {error}"))
-            })?;
-        for cert in certificates {
-            roots
-                .add(cert)
-                .map_err(|error| Db2Error::other(format!("invalid Db2 CA certificate: {error}")))?;
-        }
-    }
-    let builder = ClientConfig::builder().with_root_certificates(roots);
+    let builder = ClientConfig::builder().with_root_certificates(build_root_store(config)?);
     let client = if !config.ssl_client_cert_path.is_empty() {
         let mut cert_file = BufReader::new(File::open(&config.ssl_client_cert_path)?);
         let certificates = CertificateDer::pem_reader_iter(&mut cert_file)
@@ -10862,6 +10873,26 @@ mod tests {
             vec![cp::EXCSAT, cp::EXCSQLSET, cp::SQLSTT, cp::RDBCMM]
         );
         tls_send(socket, cp::SQLCARD, &test_sql_card(0), false).await;
+    }
+
+    #[test]
+    fn configured_ca_file_replaces_system_roots() {
+        let mut config = Config::default();
+        config.ssl_root_ca_path = tls_fixture("ca.pem");
+        let roots = build_root_store(&config).unwrap();
+        assert_eq!(roots.roots.len(), 1);
+    }
+
+    #[test]
+    fn ca_file_without_certificates_is_rejected() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let mut config = Config::default();
+        config.ssl_root_ca_path = file.path().to_string_lossy().into_owned();
+        let error = build_root_store(&config).unwrap_err();
+        assert!(
+            error.to_string().contains("contains no certificates"),
+            "{error}"
+        );
     }
 
     fn mutual_tls_config(port: u16, client_cert: Option<&str>, client_key: Option<&str>) -> Config {

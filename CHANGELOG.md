@@ -24,6 +24,7 @@ First public alpha release of `justybase-db2`, the JustyBase.Db2 Rust driver.
 
 ### Notes
 
+- When `ssl_root_ca_path` / `SSLServerCertificate` is set, that CA file replaces the system trust store instead of being added to it. A CA file without any certificate is rejected.
 - Alpha software: APIs and protocol coverage may change before a stable release. Validate against your own Db2 environment and workload before production use.
 - Kerberos / GSSAPI support is experimental (caller-supplied token path); see `docs/KERBEROS-STATUS.md`.
 - Independent project; not maintained, endorsed, sponsored, or certified by IBM. IBM and Db2 are trademarks of International Business Machines Corporation.
