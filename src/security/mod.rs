@@ -16,6 +16,7 @@ use des::Des;
 use des::cipher::{Block, BlockEncrypt, KeyInit};
 use ring::rand::{SecureRandom, SystemRandom};
 use std::fmt;
+use std::sync::LazyLock;
 
 /// Fixed-width 256-bit unsigned integer used for all Diffie-Hellman arithmetic.
 type U256 = Uint<4>;
@@ -70,16 +71,18 @@ fn prime_value() -> U256 {
     U256::from_words(PRIME_LIMBS)
 }
 
-/// Montgomery parameters for the DH prime. The prime is odd, as Montgomery reduction requires.
-fn montgomery_params() -> FixedMontyParams<4> {
+/// Montgomery parameters for the DH prime, computed once. The prime is odd, as Montgomery
+/// reduction requires.
+static MONTGOMERY_PARAMS: LazyLock<FixedMontyParams<4>> = LazyLock::new(|| {
     let modulus: Odd<U256> = Option::from(Odd::new(prime_value())).expect("DRDA prime is odd");
     FixedMontyParams::new(modulus)
-}
+});
 
 /// Computes `base^exponent mod p` in constant time with respect to the exponent.
 fn modpow(base: &U256, exponent: &U256) -> U256 {
-    let params = montgomery_params();
-    FixedMontyForm::new(base, &params).pow(exponent).retrieve()
+    FixedMontyForm::new(base, &MONTGOMERY_PARAMS)
+        .pow(exponent)
+        .retrieve()
 }
 
 /// Accepts `[2, p-2]`, the valid range for DH private exponents and public keys.
@@ -179,10 +182,10 @@ pub fn encrypt(
     server_public_key: &[u8],
     private_key: &[u8; 32],
 ) -> Result<Vec<u8>, Secmec9Error> {
-    let padded = normalize_peer(server_public_key)?;
-    if padded.len() < 20 {
+    if server_public_key.len() < 20 {
         return Err(Secmec9Error::ShortServerToken);
     }
+    let padded = normalize_peer(server_public_key)?;
     let session_key = calculate_session_key(&padded, private_key)?;
     des_cbc_encrypt(&session_key[12..20], &padded[12..20], plaintext)
 }
@@ -252,15 +255,25 @@ mod tests {
     fn dh_range_accepts_only_two_through_p_minus_two() {
         let p_minus_one = prime_value().wrapping_sub(&U256::ONE);
         let p_minus_two = p_minus_one.wrapping_sub(&U256::ONE);
-        let bytes = |value: &U256| to_bytes(value);
 
-        assert!(private_exponent(&bytes(&U256::ZERO)).is_err());
-        assert!(private_exponent(&bytes(&U256::ONE)).is_err());
-        assert!(private_exponent(&bytes(&U256::from_u64(2))).is_ok());
-        assert!(private_exponent(&bytes(&p_minus_two)).is_ok());
-        assert!(private_exponent(&bytes(&p_minus_one)).is_err());
-        assert!(validate_peer(&bytes(&U256::from_u64(2))).is_ok());
-        assert!(validate_peer(&bytes(&p_minus_one)).is_err());
+        assert!(private_exponent(&to_bytes(&U256::ZERO)).is_err());
+        assert!(private_exponent(&to_bytes(&U256::ONE)).is_err());
+        assert!(private_exponent(&to_bytes(&U256::from_u64(2))).is_ok());
+        assert!(private_exponent(&to_bytes(&p_minus_two)).is_ok());
+        assert!(private_exponent(&to_bytes(&p_minus_one)).is_err());
+        assert!(validate_peer(&to_bytes(&U256::from_u64(2))).is_ok());
+        assert!(validate_peer(&to_bytes(&p_minus_one)).is_err());
+    }
+
+    #[test]
+    fn encrypt_rejects_a_server_token_shorter_than_the_iv_offset() {
+        let client_private =
+            key_from_hex("7f3a91c4d2e5b80716a4c9f0d3b8e2176a5c4d3e2f1908a7b6c5d4e3f2a1b0c9");
+        let short_token = [0x11u8; 19];
+        assert_eq!(
+            encrypt(b"SecretPass123", &short_token, &client_private),
+            Err(Secmec9Error::ShortServerToken)
+        );
     }
 
     fn hex(bytes: &[u8]) -> String {

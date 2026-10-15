@@ -14,6 +14,10 @@ fn tls_config(ca_path: &str) -> Option<justybase_db2::Config> {
         return None;
     };
     let mut config = parse_dsn(&dsn).expect("DB2_TLS_TEST_DSN must be a valid db2s:// DSN");
+    assert!(
+        config.use_ssl,
+        "DB2_TLS_TEST_DSN must use the db2s:// scheme"
+    );
     config.ssl_root_ca_path = ca_path.to_string();
     Some(config)
 }
