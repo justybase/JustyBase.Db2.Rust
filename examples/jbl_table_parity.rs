@@ -409,6 +409,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .collect::<Vec<_>>();
                                 Db2Value::Text(String::from_utf16(&units)?)
                             }
+                            _ => return Err("unsupported LOB encoding".into()),
                         };
                     }
                 }

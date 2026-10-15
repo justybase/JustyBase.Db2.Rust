@@ -465,6 +465,7 @@ impl<'a> Db2RowRef<'a> {
 
 /// Encoding of the bytes returned by a progressive DB2 LOB locator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Db2LobEncoding {
     Binary,
     Utf8,
@@ -1488,6 +1489,7 @@ pub struct Db2Statement {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Db2ParameterDirection {
     Input,
     Output,
@@ -1511,6 +1513,7 @@ pub struct Db2ExecutionResult {
 
 /// Db2 LUW isolation applied to subsequently prepared dynamic SQL.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Db2IsolationLevel {
     #[default]
     Unspecified,

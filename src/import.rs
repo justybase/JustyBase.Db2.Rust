@@ -108,6 +108,7 @@ impl Db2ImportTarget {
 /// `max_batch_bytes` is a soft batch boundary: one row may exceed it and is then sent alone,
 /// matching the C# importer. It is not a strict cap on an individual row or wire allocation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Db2ImportPolicy {
     /// All rows are written in one importer-owned transaction and become visible together.
     Atomic {

@@ -98,6 +98,7 @@ async fn materialized(
                             .collect::<Vec<_>>();
                         Db2Value::Text(String::from_utf16(&words)?)
                     }
+                    _ => return Err("unsupported LOB encoding".into()),
                 };
                 normalized.push(value);
             } else {

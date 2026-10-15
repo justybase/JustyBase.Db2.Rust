@@ -7,6 +7,7 @@ pub mod diagnostics;
 mod error;
 mod import;
 pub mod network;
+#[doc(hidden)]
 pub mod replay;
 pub mod resources;
 pub mod security;

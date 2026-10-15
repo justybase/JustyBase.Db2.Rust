@@ -45,6 +45,7 @@ pub enum Db2ErrorKind {
 
 /// Whether the failing operation reached a confirmed server result. This is not a retry policy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Db2OperationOutcome {
     NotStarted,
     Confirmed,
