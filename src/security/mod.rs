@@ -17,9 +17,25 @@ use des::cipher::{Block, BlockEncrypt, KeyInit};
 use ring::rand::{SecureRandom, SystemRandom};
 use std::fmt;
 use std::sync::LazyLock;
+use zeroize::{Zeroize, Zeroizing};
 
 /// Fixed-width 256-bit unsigned integer used for all Diffie-Hellman arithmetic.
 type U256 = Uint<4>;
+
+/// A Diffie-Hellman private exponent. Its limbs are overwritten when the value is dropped.
+struct PrivateExponent(U256);
+
+impl PrivateExponent {
+    fn wipe(&mut self) {
+        self.0.as_mut_words().zeroize();
+    }
+}
+
+impl Drop for PrivateExponent {
+    fn drop(&mut self) {
+        self.wipe();
+    }
+}
 
 const PRIME_LIMBS: [u64; 4] = [
     0x1e4c7a0d8c16b3e3,
@@ -98,12 +114,12 @@ fn to_bytes(value: &U256) -> [u8; 32] {
     output
 }
 
-fn private_exponent(private_key: &[u8; 32]) -> Result<U256, Secmec9Error> {
+fn private_exponent(private_key: &[u8; 32]) -> Result<PrivateExponent, Secmec9Error> {
     let value = U256::from_be_slice(private_key);
     if !in_dh_range(&value) {
         return Err(Secmec9Error::InvalidPrivateKey);
     }
-    Ok(value)
+    Ok(PrivateExponent(value))
 }
 
 fn normalize_peer(public_key: &[u8]) -> Result<[u8; 32], Secmec9Error> {
@@ -123,16 +139,17 @@ fn validate_peer(padded: &[u8; 32]) -> Result<U256, Secmec9Error> {
     Ok(peer)
 }
 
-/// Generates a 255-bit Diffie-Hellman private exponent from the OS entropy pool.
-pub fn generate_private_key() -> Result<[u8; 32], Secmec9Error> {
+/// Generates a 255-bit Diffie-Hellman private exponent from the OS entropy pool. The key is
+/// zeroized when the returned value is dropped.
+pub fn generate_private_key() -> Result<Zeroizing<[u8; 32]>, Secmec9Error> {
     let random = SystemRandom::new();
+    let mut bytes = Zeroizing::new([0u8; 32]);
     loop {
-        let mut bytes = [0u8; 32];
-        random.fill(&mut bytes).map_err(|_| {
+        random.fill(&mut *bytes).map_err(|_| {
             Secmec9Error::Cipher("operating system secure random generation failed".into())
         })?;
         bytes[0] &= 0x7f;
-        if in_dh_range(&U256::from_be_slice(&bytes)) {
+        if in_dh_range(&U256::from_be_slice(&*bytes)) {
             return Ok(bytes);
         }
     }
@@ -141,18 +158,22 @@ pub fn generate_private_key() -> Result<[u8; 32], Secmec9Error> {
 /// Computes `g^private mod p` as the 32-byte big-endian DRDA public key.
 pub fn calculate_public_key(private_key: &[u8; 32]) -> Result<[u8; 32], Secmec9Error> {
     let exponent = private_exponent(private_key)?;
-    Ok(to_bytes(&modpow(&U256::from_words(BASE_LIMBS), &exponent)))
+    Ok(to_bytes(&modpow(
+        &U256::from_words(BASE_LIMBS),
+        &exponent.0,
+    )))
 }
 
-/// Derives the 32-byte shared secret from the peer public key and client private key.
+/// Derives the 32-byte shared secret from the peer public key and client private key. The
+/// secret is zeroized when the returned value is dropped.
 pub fn calculate_session_key(
     peer_public_key: &[u8],
     private_key: &[u8; 32],
-) -> Result<[u8; 32], Secmec9Error> {
+) -> Result<Zeroizing<[u8; 32]>, Secmec9Error> {
     let exponent = private_exponent(private_key)?;
     let padded = normalize_peer(peer_public_key)?;
     let peer = validate_peer(&padded)?;
-    Ok(to_bytes(&modpow(&peer, &exponent)))
+    Ok(Zeroizing::new(to_bytes(&modpow(&peer, &exponent.0))))
 }
 
 fn des_cbc_encrypt(key: &[u8], iv: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, Secmec9Error> {
@@ -274,6 +295,22 @@ mod tests {
             encrypt(b"SecretPass123", &short_token, &client_private),
             Err(Secmec9Error::ShortServerToken)
         );
+    }
+
+    #[test]
+    fn generated_private_keys_are_in_range() {
+        for _ in 0..8 {
+            let key = generate_private_key().unwrap();
+            assert!(private_exponent(&key).is_ok());
+            assert_eq!(key[0] & 0x80, 0, "top bit is cleared by generation");
+        }
+    }
+
+    #[test]
+    fn private_exponent_wipe_clears_every_limb() {
+        let mut exponent = PrivateExponent(U256::from_u64(0x1234_5678));
+        exponent.wipe();
+        assert_eq!(exponent.0.as_words(), &[0; 4]);
     }
 
     fn hex(bytes: &[u8]) -> String {

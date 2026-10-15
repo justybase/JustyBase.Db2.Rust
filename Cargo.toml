@@ -45,6 +45,7 @@ tempfile = "3.27.0"
 des = "0.8"
 ring = "0.17.14"
 crypto-bigint = { version = "0.7.5", default-features = false }
+zeroize = "1.9.1"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["async_tokio"] }

@@ -4552,7 +4552,7 @@ impl Db2Session {
         )?;
         self.send(&excsat, false, false, None).await?;
         let requested_mechanism = self.security_mechanism;
-        let mut client_private_key: Option<[u8; 32]> = None;
+        let mut client_private_key: Option<zeroize::Zeroizing<[u8; 32]>> = None;
         let mut accsec_token: Vec<u8> = Vec::new();
         let mut gssapi_token: Vec<u8> = Vec::new();
         if requested_mechanism == 9 {

@@ -639,7 +639,7 @@
     {
       "path": "security::calculate_session_key",
       "kind": "fn",
-      "declaration": "pub fn calculate_session_key( peer_public_key: &[u8], private_key: &[u8; 32], ) -> Result<[u8; 32], Secmec9Error>",
+      "declaration": "pub fn calculate_session_key( peer_public_key: &[u8], private_key: &[u8; 32], ) -> Result<Zeroizing<[u8; 32]>, Secmec9Error>",
       "methods": []
     },
     {
@@ -651,7 +651,7 @@
     {
       "path": "security::generate_private_key",
       "kind": "fn",
-      "declaration": "pub fn generate_private_key() -> Result<[u8; 32], Secmec9Error>",
+      "declaration": "pub fn generate_private_key() -> Result<Zeroizing<[u8; 32]>, Secmec9Error>",
       "methods": []
     },
     {
@@ -1053,5 +1053,5 @@
       "methods": []
     }
   ],
-  "digest": "6304dad5cedfb23db4bff88b060ca909251abdb81f1dca165fe70c7a1a54ed6a"
+  "digest": "4b758e3bb8c2e10f80f7f1cd0072da9cef982b765783a179db1f0e75e8e1b02e"
 }
