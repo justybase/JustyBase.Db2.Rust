@@ -59,7 +59,7 @@ The maintained live qualification baseline is Db2 LUW 12.1.5 on Linux x64. Windo
 
 ```toml
 [dependencies]
-justybase-db2 = "0.1.0-alpha.1"
+justybase-db2 = "0.1.0-alpha.2"
 ```
 
 In Rust source code import the crate as `justybase_db2`.

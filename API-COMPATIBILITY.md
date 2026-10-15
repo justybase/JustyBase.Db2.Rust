@@ -15,7 +15,7 @@ Two artifacts work together:
 | Experimental | Security/auth helpers, interrupt edge semantics, selected import/session controls | May change between alpha releases, but changes must remain explicit and documented. |
 | Low-level unstable | Protocol/codec modules (`network::{codepoint,ddm,dss,stream}`) and the `replay` test harness, marked `#[doc(hidden)]` | Not in rustdoc and not in the API snapshot; no compatibility promise. May be reduced/internalized before stable release. |
 
-Before 1.0, Semantic Versioning permits breaking changes through minor-version changes. `0.1.0-alpha.1` is intentionally not a stable 1.0 contract.
+Before 1.0, Semantic Versioning permits breaking changes through minor-version changes. The `0.1.0` alpha releases are intentionally not a stable 1.0 contract.
 
 Public enums that may gain variants (`Db2ImportPolicy`, `Db2OperationOutcome`, `Db2IsolationLevel`, `Db2LobEncoding`, `Db2ParameterDirection`) are `#[non_exhaustive]`: match them with a wildcard arm outside the crate. Adding a variant to these is not a breaking change.
 

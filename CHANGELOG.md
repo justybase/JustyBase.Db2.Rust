@@ -4,7 +4,15 @@ All notable public changes to this project will be documented here.
 
 The project follows Semantic Versioning.
 
-## 0.1.0-alpha.1 - 2026-10-10
+## 0.1.0-alpha.2 - 2026-10-15
+
+Second alpha release. The runtime code is identical to `0.1.0-alpha.1`; this release corrects the release metadata and documentation.
+
+### Changed
+
+- Release date of `0.1.0-alpha.1` corrected to the actual publication date; installation examples and the API policy no longer name a single alpha version.
+
+## 0.1.0-alpha.1 - 2026-10-15
 
 First public alpha release of `justybase-db2`, the JustyBase.Db2 Rust driver.
 
