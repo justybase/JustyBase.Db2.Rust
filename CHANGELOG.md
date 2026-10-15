@@ -6,11 +6,17 @@ The project follows Semantic Versioning.
 
 ## 0.1.0-alpha.2 - 2026-10-15
 
-Second alpha release. The runtime code is identical to `0.1.0-alpha.1`; this release corrects the release metadata and documentation.
+Second alpha release of `justybase-db2`.
+
+### Added
+
+- `examples/usage.rs`: a usage example covering connection, queries, a prepared statement, a transaction, and outcome-based error handling. Run it with `DB2_DSN` set.
 
 ### Changed
 
-- Release date of `0.1.0-alpha.1` corrected to the actual publication date; installation examples and the API policy no longer name a single alpha version.
+- `security::generate_private_key` and `security::calculate_session_key` return `Zeroizing<[u8; 32]>` (the `zeroize` crate). The SECMEC 9 Diffie-Hellman private key and shared secret are overwritten when the value is dropped. The value dereferences to `[u8; 32]`; this is an experimental helper, so the signature change is recorded in the API snapshot.
+- The SECMEC 9 private exponent limbs are overwritten after each modular exponentiation.
+- Corrected the `0.1.0-alpha.1` release date; installation examples and the API policy no longer name a single alpha version.
 
 ## 0.1.0-alpha.1 - 2026-10-15
 
