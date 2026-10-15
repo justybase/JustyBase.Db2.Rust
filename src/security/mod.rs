@@ -3,13 +3,22 @@
 //!
 //! The prime, generator, exponent length, key/IV derivation, and padding match
 //! the published DRDA values used by Apache Derby's EncryptionManager and
-//! DecryptionManager. A tiny fixed-limb modular arithmetic implementation
-//! keeps the runtime dependency surface unchanged apart from the DES cipher.
+//! DecryptionManager. Modular exponentiation is delegated to `crypto-bigint`
+//! (fixed-width Montgomery form), whose running time does not depend on the
+//! bit pattern of the exponent, so the private key is not leaked through timing.
 
+use crypto_bigint::{
+    Odd, Uint,
+    modular::{FixedMontyForm, FixedMontyParams},
+    prelude::CtLt,
+};
 use des::Des;
 use des::cipher::{Block, BlockEncrypt, KeyInit};
 use ring::rand::{SecureRandom, SystemRandom};
 use std::fmt;
+
+/// Fixed-width 256-bit unsigned integer used for all Diffie-Hellman arithmetic.
+type U256 = Uint<4>;
 
 const PRIME_LIMBS: [u64; 4] = [
     0x1e4c7a0d8c16b3e3,
@@ -57,115 +66,38 @@ impl fmt::Display for Secmec9Error {
 
 impl std::error::Error for Secmec9Error {}
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
-struct U256([u64; 4]);
-
-impl U256 {
-    const ONE: Self = Self([1, 0, 0, 0]);
-
-    fn from_be_bytes(bytes: &[u8; 32]) -> Self {
-        let mut limbs = [0u64; 4];
-        for (index, limb) in limbs.iter_mut().enumerate() {
-            let start = 32 - 8 * (index + 1);
-            *limb = u64::from_be_bytes(bytes[start..start + 8].try_into().expect("8-byte limb"));
-        }
-        Self(limbs)
-    }
-
-    fn to_be_bytes(self) -> [u8; 32] {
-        let mut output = [0u8; 32];
-        for index in 0..4 {
-            output[32 - 8 * (index + 1)..32 - 8 * index]
-                .copy_from_slice(&self.0[index].to_be_bytes());
-        }
-        output
-    }
-
-    fn bit(self, index: usize) -> bool {
-        (self.0[index / 64] >> (index % 64)) & 1 == 1
-    }
-
-    fn lt(self, other: Self) -> bool {
-        for index in (0..4).rev() {
-            if self.0[index] != other.0[index] {
-                return self.0[index] < other.0[index];
-            }
-        }
-        false
-    }
-
-    fn add_carry(self, other: Self) -> (Self, bool) {
-        let mut output = [0u64; 4];
-        let mut carry = false;
-        for (index, slot) in output.iter_mut().enumerate() {
-            let (sum, carry_a) = self.0[index].overflowing_add(other.0[index]);
-            let (sum, carry_b) = sum.overflowing_add(u64::from(carry));
-            *slot = sum;
-            carry = carry_a || carry_b;
-        }
-        (Self(output), carry)
-    }
-
-    fn sub_wrapping(self, other: Self) -> Self {
-        let mut output = [0u64; 4];
-        let mut borrow = false;
-        for (index, slot) in output.iter_mut().enumerate() {
-            let (difference, borrow_a) = self.0[index].overflowing_sub(other.0[index]);
-            let (difference, borrow_b) = difference.overflowing_sub(u64::from(borrow));
-            *slot = difference;
-            borrow = borrow_a || borrow_b;
-        }
-        Self(output)
-    }
-
-    fn add_mod(self, other: Self, modulus: Self) -> Self {
-        let (sum, carry) = self.add_carry(other);
-        if carry || !sum.lt(modulus) {
-            sum.sub_wrapping(modulus)
-        } else {
-            sum
-        }
-    }
-
-    /// Schoolbook double-and-add modular multiplication. The operands are
-    /// below the 256-bit modulus, so 256 shift/add steps are sufficient.
-    fn mul_mod(self, other: Self, modulus: Self) -> Self {
-        let mut result = Self::default();
-        let mut addend = self;
-        for index in 0..256 {
-            if other.bit(index) {
-                result = result.add_mod(addend, modulus);
-            }
-            addend = addend.add_mod(addend, modulus);
-        }
-        result
-    }
-
-    fn pow_mod(self, exponent: Self, modulus: Self) -> Self {
-        let mut result = Self::ONE;
-        let mut base = self;
-        for index in 0..256 {
-            if exponent.bit(index) {
-                result = result.mul_mod(base, modulus);
-            }
-            base = base.mul_mod(base, modulus);
-        }
-        result
-    }
+fn prime_value() -> U256 {
+    U256::from_words(PRIME_LIMBS)
 }
 
-fn prime() -> U256 {
-    U256(PRIME_LIMBS)
+/// Montgomery parameters for the DH prime. The prime is odd, as Montgomery reduction requires.
+fn montgomery_params() -> FixedMontyParams<4> {
+    let modulus: Odd<U256> = Option::from(Odd::new(prime_value())).expect("DRDA prime is odd");
+    FixedMontyParams::new(modulus)
 }
 
-fn base() -> U256 {
-    U256(BASE_LIMBS)
+/// Computes `base^exponent mod p` in constant time with respect to the exponent.
+fn modpow(base: &U256, exponent: &U256) -> U256 {
+    let params = montgomery_params();
+    FixedMontyForm::new(base, &params).pow(exponent).retrieve()
+}
+
+/// Accepts `[2, p-2]`, the valid range for DH private exponents and public keys.
+fn in_dh_range(value: &U256) -> bool {
+    let two = U256::from_u64(2);
+    let upper = prime_value().wrapping_sub(&U256::ONE);
+    bool::from(!value.ct_lt(&two)) && bool::from(value.ct_lt(&upper))
+}
+
+fn to_bytes(value: &U256) -> [u8; 32] {
+    let mut output = [0u8; 32];
+    output.copy_from_slice(&value.to_be_bytes());
+    output
 }
 
 fn private_exponent(private_key: &[u8; 32]) -> Result<U256, Secmec9Error> {
-    let value = U256::from_be_bytes(private_key);
-    let p = prime();
-    if value.lt(U256([2, 0, 0, 0])) || !value.lt(p.sub_wrapping(U256::ONE)) {
+    let value = U256::from_be_slice(private_key);
+    if !in_dh_range(&value) {
         return Err(Secmec9Error::InvalidPrivateKey);
     }
     Ok(value)
@@ -181,9 +113,8 @@ fn normalize_peer(public_key: &[u8]) -> Result<[u8; 32], Secmec9Error> {
 }
 
 fn validate_peer(padded: &[u8; 32]) -> Result<U256, Secmec9Error> {
-    let peer = U256::from_be_bytes(padded);
-    let p = prime();
-    if peer.lt(U256([2, 0, 0, 0])) || !peer.lt(p.sub_wrapping(U256::ONE)) {
+    let peer = U256::from_be_slice(padded);
+    if !in_dh_range(&peer) {
         return Err(Secmec9Error::InvalidPublicKey);
     }
     Ok(peer)
@@ -192,15 +123,13 @@ fn validate_peer(padded: &[u8; 32]) -> Result<U256, Secmec9Error> {
 /// Generates a 255-bit Diffie-Hellman private exponent from the OS entropy pool.
 pub fn generate_private_key() -> Result<[u8; 32], Secmec9Error> {
     let random = SystemRandom::new();
-    let p = prime();
     loop {
         let mut bytes = [0u8; 32];
         random.fill(&mut bytes).map_err(|_| {
             Secmec9Error::Cipher("operating system secure random generation failed".into())
         })?;
         bytes[0] &= 0x7f;
-        let candidate = U256::from_be_bytes(&bytes);
-        if !candidate.lt(U256([2, 0, 0, 0])) && candidate.lt(p.sub_wrapping(U256::ONE)) {
+        if in_dh_range(&U256::from_be_slice(&bytes)) {
             return Ok(bytes);
         }
     }
@@ -209,7 +138,7 @@ pub fn generate_private_key() -> Result<[u8; 32], Secmec9Error> {
 /// Computes `g^private mod p` as the 32-byte big-endian DRDA public key.
 pub fn calculate_public_key(private_key: &[u8; 32]) -> Result<[u8; 32], Secmec9Error> {
     let exponent = private_exponent(private_key)?;
-    Ok(base().pow_mod(exponent, prime()).to_be_bytes())
+    Ok(to_bytes(&modpow(&U256::from_words(BASE_LIMBS), &exponent)))
 }
 
 /// Derives the 32-byte shared secret from the peer public key and client private key.
@@ -220,7 +149,7 @@ pub fn calculate_session_key(
     let exponent = private_exponent(private_key)?;
     let padded = normalize_peer(peer_public_key)?;
     let peer = validate_peer(&padded)?;
-    Ok(peer.pow_mod(exponent, prime()).to_be_bytes())
+    Ok(to_bytes(&modpow(&peer, &exponent)))
 }
 
 fn des_cbc_encrypt(key: &[u8], iv: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, Secmec9Error> {
@@ -317,6 +246,21 @@ mod tests {
             des_cbc_decrypt(expected_key, iv, &encrypted_userid),
             b"DB2INST1"
         );
+    }
+
+    #[test]
+    fn dh_range_accepts_only_two_through_p_minus_two() {
+        let p_minus_one = prime_value().wrapping_sub(&U256::ONE);
+        let p_minus_two = p_minus_one.wrapping_sub(&U256::ONE);
+        let bytes = |value: &U256| to_bytes(value);
+
+        assert!(private_exponent(&bytes(&U256::ZERO)).is_err());
+        assert!(private_exponent(&bytes(&U256::ONE)).is_err());
+        assert!(private_exponent(&bytes(&U256::from_u64(2))).is_ok());
+        assert!(private_exponent(&bytes(&p_minus_two)).is_ok());
+        assert!(private_exponent(&bytes(&p_minus_one)).is_err());
+        assert!(validate_peer(&bytes(&U256::from_u64(2))).is_ok());
+        assert!(validate_peer(&bytes(&p_minus_one)).is_err());
     }
 
     fn hex(bytes: &[u8]) -> String {
