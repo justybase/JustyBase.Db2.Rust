@@ -211,6 +211,32 @@ pub fn encrypt(
     des_cbc_encrypt(&session_key[12..20], &padded[12..20], plaintext)
 }
 
+/// Encrypts the password field for DRDA USRENCPWD (SECMEC 7) with DES-CBC/PKCS#5. Its DES key
+/// comes from the same DH shared secret as SECMEC 9, but its IV is the CP500 user ID (passed
+/// already encoded) padded with zero bytes or truncated to one DES block. SECMEC 9 instead
+/// encrypts both identity fields using an IV from the server public key; the two mechanisms
+/// are not wire-compatible.
+pub fn encrypt_usrencpwd(
+    plaintext: &[u8],
+    cp500_user_id: &[u8],
+    server_public_key: &[u8],
+    private_key: &[u8; 32],
+) -> Result<Vec<u8>, Secmec9Error> {
+    if cp500_user_id.is_empty() {
+        return Err(Secmec9Error::Cipher(
+            "DB2 USRENCPWD requires a non-empty user ID".into(),
+        ));
+    }
+    if server_public_key.len() < 20 {
+        return Err(Secmec9Error::ShortServerToken);
+    }
+    let session_key = calculate_session_key(server_public_key, private_key)?;
+    let mut iv = [0u8; 8];
+    let length = cp500_user_id.len().min(8);
+    iv[..length].copy_from_slice(&cp500_user_id[..length]);
+    des_cbc_encrypt(&session_key[12..20], &iv, plaintext)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

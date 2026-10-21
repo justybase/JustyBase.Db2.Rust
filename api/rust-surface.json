@@ -5,7 +5,7 @@
     "struct": 49,
     "enum": 16,
     "trait": 0,
-    "fn": 14,
+    "fn": 15,
     "type": 0,
     "constant": 68,
     "static": 0,
@@ -649,6 +649,12 @@
       "methods": []
     },
     {
+      "path": "security::encrypt_usrencpwd",
+      "kind": "fn",
+      "declaration": "pub fn encrypt_usrencpwd( plaintext: &[u8], cp500_user_id: &[u8], server_public_key: &[u8], private_key: &[u8; 32], ) -> Result<Vec<u8>, Secmec9Error>",
+      "methods": []
+    },
+    {
       "path": "security::generate_private_key",
       "kind": "fn",
       "declaration": "pub fn generate_private_key() -> Result<Zeroizing<[u8; 32]>, Secmec9Error>",
@@ -1053,5 +1059,5 @@
       "methods": []
     }
   ],
-  "digest": "4b758e3bb8c2e10f80f7f1cd0072da9cef982b765783a179db1f0e75e8e1b02e"
+  "digest": "29f37ee797bdf5d0fc61bf6ce0fecdefee127f5dfd35eeecff159abedd9d08eb"
 }

@@ -1668,6 +1668,8 @@ pub struct Db2Session {
     config: Config,
     database: String,
     security_mechanism: u16,
+    /// Mechanism the server accepted in ACCSECRD; 0 until the handshake completes.
+    negotiated_security_mechanism: u16,
     query_block_size: u32,
     correlation_id: u16,
     auto_commit: bool,
@@ -1916,11 +1918,11 @@ impl Db2Session {
                 "DB2 user name is required",
             ));
         }
-        if !matches!(config.security_mechanism, 0 | 3 | 9 | 11) {
+        if !matches!(config.security_mechanism, 0 | 3 | 7 | 9 | 11) {
             return Err(Db2Error::new(
                 Db2ErrorKind::InvalidConfiguration,
                 format!(
-                    "unsupported DB2 authentication mechanism {}; supported mechanisms are 3 (USRIDPWD), 9 (EUSRIDPWD), and 11 (Kerberos/GSSAPI)",
+                    "unsupported DB2 authentication mechanism {}; supported mechanisms are 3 (USRIDPWD), 7 (USRENCPWD), 9 (EUSRIDPWD), and 11 (Kerberos/GSSAPI)",
                     config.security_mechanism
                 ),
             ));
@@ -1973,6 +1975,7 @@ impl Db2Session {
             config,
             database,
             security_mechanism,
+            negotiated_security_mechanism: 0,
             query_block_size,
             correlation_id: 1,
             auto_commit: true,
@@ -4540,9 +4543,110 @@ impl Db2Session {
         self.stream.shutdown().await.map_err(Into::into)
     }
 
+    /// Sends one ACCSEC and reads ACCSECRD. ACCSECRD echoes the requested SECMEC
+    /// on success. On rejection it carries the list of mechanisms the server
+    /// accepts (one SECMEC parameter holding several 2-byte values), SECCHKCD and,
+    /// for encrypting servers, the ENCALG list -- but no SECTKN, so the client
+    /// cannot switch mechanisms in SECCHK; it has to send a new ACCSEC.
+    async fn access_security(
+        &mut self,
+        mechanism: u16,
+        retry: bool,
+    ) -> Result<SecurityExchange, Db2Error> {
+        let mut client_private_key: Option<zeroize::Zeroizing<[u8; 32]>> = None;
+        let mut accsec_token: Vec<u8> = Vec::new();
+        if mechanism == 7 || mechanism == 9 {
+            let name = if mechanism == 7 {
+                "USRENCPWD"
+            } else {
+                "EUSRIDPWD"
+            };
+            let private = crate::security::generate_private_key().map_err(|error| {
+                Db2Error::other(format!("DB2 {name} key generation failed: {error}"))
+            })?;
+            accsec_token = crate::security::calculate_public_key(&private)
+                .map_err(|error| {
+                    Db2Error::other(format!("DB2 {name} key generation failed: {error}"))
+                })?
+                .to_vec();
+            client_private_key = Some(private);
+        }
+        let security = security_enum(mechanism)?;
+        let accsec = ddm::pack_accsec(
+            &self.database,
+            security,
+            &accsec_token,
+            (mechanism == 7).then_some(1),
+        )?;
+        self.send(&accsec, false, true, None).await?;
+        let mut server_mechanisms = vec![mechanism];
+        let mut check_code = 0u8;
+        let mut security_token = Vec::new();
+        let mut encryption_algorithms = None;
+        for reply in self.read_reply_chain().await? {
+            if reply.codepoint == cp::RDBNFNRM {
+                return Err(Db2Error::new(
+                    Db2ErrorKind::DatabaseNotFound,
+                    "DB2 relational database was not found",
+                ));
+            }
+            if reply.codepoint == cp::ACCSECRD {
+                let fields = ddm::parse_ddm_parameters(&reply.payload)?;
+                if let Some(value) = fields.get(&cp::SECMEC) {
+                    server_mechanisms = parse_u16_list(value, "security mechanism")?;
+                }
+                if let Some(code) = fields.get(&cp::SECCHKCD).and_then(|value| value.first()) {
+                    check_code = *code;
+                }
+                if let Some(value) = fields.get(&cp::SECTKN) {
+                    security_token = value.clone();
+                }
+                if let Some(value) = fields.get(&cp::ENCALG) {
+                    encryption_algorithms = Some(parse_u16_list(value, "encryption algorithm")?);
+                }
+            }
+        }
+        if server_mechanisms != [mechanism] {
+            // A server that rejects the mechanism we switched to is not trusted for another round.
+            if retry {
+                return Err(Db2Error::new(
+                    Db2ErrorKind::Unsupported,
+                    format!(
+                        "DB2 listed security mechanism {mechanism} as accepted but then rejected it (server accepts {})",
+                        join_u16(&server_mechanisms, ", ")
+                    ),
+                ));
+            }
+            return Ok(SecurityExchange {
+                rejected_by: Some((server_mechanisms, check_code)),
+                security_token,
+                encryption_algorithms,
+                client_private_key,
+            });
+        }
+        if check_code != 0 {
+            return Err(Db2Error::new(
+                Db2ErrorKind::AuthenticationFailed,
+                format!("DB2 rejected the security exchange (SECCHKCD={check_code})"),
+            ));
+        }
+        Ok(SecurityExchange {
+            rejected_by: None,
+            security_token,
+            encryption_algorithms,
+            client_private_key,
+        })
+    }
+
     async fn handshake(&mut self) -> Result<(), Db2Error> {
         self.correlation_id = 1;
         let machine = std::env::var("HOSTNAME").unwrap_or_else(|_| "justybase-db2-client".into());
+        let mut mechanism = self.security_mechanism;
+        let gssapi_token = if mechanism == 11 {
+            std::fs::read(&self.config.gssapi_token_file)?
+        } else {
+            Vec::new()
+        };
         let excsat = ddm::pack_excsat(
             "justybase-db2",
             &machine,
@@ -4551,53 +4655,45 @@ impl Db2Session {
             &ddm::default_manager_levels(),
         )?;
         self.send(&excsat, false, false, None).await?;
-        let requested_mechanism = self.security_mechanism;
-        let mut client_private_key: Option<zeroize::Zeroizing<[u8; 32]>> = None;
-        let mut accsec_token: Vec<u8> = Vec::new();
-        let mut gssapi_token: Vec<u8> = Vec::new();
-        if requested_mechanism == 9 {
-            let private = crate::security::generate_private_key().map_err(|error| {
-                Db2Error::other(format!("DB2 EUSRIDPWD key generation failed: {error}"))
-            })?;
-            accsec_token = crate::security::calculate_public_key(&private)
-                .map_err(|error| {
-                    Db2Error::other(format!("DB2 EUSRIDPWD key generation failed: {error}"))
-                })?
-                .to_vec();
-            client_private_key = Some(private);
-        } else if requested_mechanism == 11 {
-            gssapi_token = std::fs::read(&self.config.gssapi_token_file)?;
-        }
-        let security = security_enum(requested_mechanism)?;
-        let accsec = ddm::pack_accsec(&self.database, security, &accsec_token)?;
-        self.send(&accsec, false, true, None).await?;
-        let negotiation = self.read_reply_chain().await?;
-        let mut negotiated = self.security_mechanism;
-        let mut security_token = Vec::new();
-        for reply in negotiation {
-            if reply.codepoint == cp::RDBNFNRM {
-                return Err(Db2Error::new(
-                    Db2ErrorKind::DatabaseNotFound,
-                    "DB2 relational database was not found",
-                ));
-            }
-            if reply.codepoint == cp::ACCSECRD {
-                if let Some(value) = ddm::find_ddm_parameter(&reply.payload, cp::SECMEC)?
-                    && value.len() >= 2
-                {
-                    negotiated = u16::from_be_bytes([value[0], value[1]]);
-                }
-                if let Some(value) = ddm::find_ddm_parameter(&reply.payload, cp::SECTKN)? {
-                    security_token = value.to_vec();
-                }
+        let mut exchange = self.access_security(mechanism, false).await?;
+        if self.config.security_mechanism == 0
+            && let Some((offered, _)) = &exchange.rejected_by
+        {
+            // No mechanism was configured: like IBM CLI, follow a server that refuses
+            // the plaintext default, but only to an encrypting mechanism it listed
+            // (9, else 7). No credentials have been sent yet, and Db2 accepts a new
+            // ACCSEC on the same connection after rejecting one.
+            if let Some(upgrade) = [9, 7]
+                .into_iter()
+                .find(|candidate| offered.contains(candidate))
+            {
+                mechanism = upgrade;
+                self.correlation_id = 1;
+                exchange = self.access_security(mechanism, true).await?;
             }
         }
-        if negotiated != self.security_mechanism {
-            return Err(Db2Error::other(format!(
-                "DB2 selected security mechanism {negotiated}, but this connection requested {}; mechanism changes are not allowed",
-                self.security_mechanism
-            )));
+        if let Some((accepted, check_code)) = &exchange.rejected_by {
+            let check = if *check_code != 0 {
+                format!(" (SECCHKCD={check_code})")
+            } else {
+                String::new()
+            };
+            return Err(Db2Error::new(
+                Db2ErrorKind::Unsupported,
+                format!(
+                    "DB2 rejected security mechanism {mechanism}{check}; the server accepts {}. Set security_mechanism to one of them (7 or 9 for AUTHENTICATION=SERVER_ENCRYPT)",
+                    join_u16(accepted, ", ")
+                ),
+            ));
         }
+        self.negotiated_security_mechanism = mechanism;
+        let negotiated = mechanism;
+        let SecurityExchange {
+            security_token,
+            encryption_algorithms,
+            client_private_key,
+            ..
+        } = exchange;
         if negotiated == 3 {
             let secchk = ddm::pack_secchk(
                 3,
@@ -4639,13 +4735,48 @@ impl Db2Session {
             let secchk =
                 ddm::pack_secchk_eusridpwd(&encrypted_userid, &encrypted_password, &self.database)?;
             self.send(&secchk, false, false, None).await?;
+        } else if negotiated == 7 {
+            let private = client_private_key.ok_or_else(|| {
+                Db2Error::other(
+                    "DB2 USRENCPWD requires a client Diffie-Hellman key pair".to_string(),
+                )
+            })?;
+            // ENCALG is absent on older servers (DES implied); Db2 LUW echoes ENCALG=1.
+            if let Some(algorithms) = &encryption_algorithms
+                && algorithms.as_slice() != [1]
+            {
+                return Err(Db2Error::new(
+                    Db2ErrorKind::Unsupported,
+                    format!(
+                        "DB2 selected USRENCPWD encryption algorithm ENCALG={}; this driver supports DES (ENCALG=1) only",
+                        join_u16(algorithms, ",")
+                    ),
+                ));
+            }
+            if security_token.len() < 20 {
+                return Err(Db2Error::protocol(
+                    "DB2 USRENCPWD key exchange did not return a usable server security token",
+                ));
+            }
+            let encrypted_password = crate::security::encrypt_usrencpwd(
+                &encode_cp500(&self.config.password).map_err(Db2Error::other)?,
+                &encode_cp500(&self.config.user).map_err(Db2Error::other)?,
+                &security_token,
+                &private,
+            )
+            .map_err(|error| {
+                Db2Error::other(format!("DB2 USRENCPWD encryption failed: {error}"))
+            })?;
+            let secchk =
+                ddm::pack_secchk_usrencpwd(&self.database, &self.config.user, &encrypted_password)?;
+            self.send(&secchk, false, false, None).await?;
         } else if negotiated == 11 {
             let secchk =
                 ddm::pack_secchk_kerberos(&gssapi_token, &self.database, &self.config.user)?;
             self.send(&secchk, false, false, None).await?;
         } else {
             return Err(Db2Error::other(format!(
-                "DB2 negotiated security mechanism {negotiated}; mechanisms 3, 9, and 11 are currently implemented"
+                "DB2 negotiated security mechanism {negotiated}; mechanisms 3, 7, 9, and 11 are currently implemented"
             )));
         }
         let accrdb = ddm::pack_accrdb("SQL12010", &self.database, ddm::StringEncoding::Cp500)?;
@@ -4843,12 +4974,12 @@ impl Db2Session {
         }
         // DRDA re-authentication fallback, mirroring go-db2: a standalone SECCHK
         // revalidates the new identity on the existing connection context.
-        if self.security_mechanism != 3 {
+        if self.negotiated_security_mechanism != 3 {
             return Err(Db2Error::new(
                 Db2ErrorKind::Unsupported,
                 format!(
                     "DB2 user switch fallback requires security mechanism 3; current mechanism {} is not supported for mid-session re-authentication",
-                    self.security_mechanism
+                    self.negotiated_security_mechanism
                 ),
             ));
         }
@@ -6548,10 +6679,43 @@ fn quote_identifier(value: &str) -> Result<String, Db2Error> {
     Ok(format!("\"{}\"", value.replace('"', "\"\"")))
 }
 
+/// Result of one ACCSEC/ACCSECRD exchange.
+struct SecurityExchange {
+    /// Mechanisms the server accepts and its SECCHKCD when it refused the requested one.
+    rejected_by: Option<(Vec<u16>, u8)>,
+    security_token: Vec<u8>,
+    encryption_algorithms: Option<Vec<u16>>,
+    client_private_key: Option<zeroize::Zeroizing<[u8; 32]>>,
+}
+
+/// Decodes a DDM parameter holding one or more big-endian 2-byte values (SECMEC, ENCALG lists).
+fn parse_u16_list(value: &[u8], name: &str) -> Result<Vec<u16>, Db2Error> {
+    if value.is_empty() || !value.len().is_multiple_of(2) {
+        return Err(Db2Error::protocol(format!(
+            "DB2 returned a malformed {name} list in ACCSECRD"
+        )));
+    }
+    Ok(value
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| u16::from_be_bytes(*pair))
+        .collect())
+}
+
+fn join_u16(values: &[u16], separator: &str) -> String {
+    values
+        .iter()
+        .map(u16::to_string)
+        .collect::<Vec<_>>()
+        .join(separator)
+}
+
 fn security_enum(value: u16) -> Result<SecurityMechanism, Db2Error> {
     match value {
         3 => Ok(SecurityMechanism::USRIDPWD),
         4 => Ok(SecurityMechanism::USRIDONL),
+        7 => Ok(SecurityMechanism::USRENCPWD),
         9 => Ok(SecurityMechanism::EUSRIDPWD),
         11 => Ok(SecurityMechanism::KERBEROS),
         _ => Err(Db2Error::protocol(format!(
@@ -8052,6 +8216,7 @@ mod tests {
             config: Config::default(),
             database: "TESTDB".into(),
             security_mechanism: 3,
+            negotiated_security_mechanism: 3,
             query_block_size: 1024,
             correlation_id: 1,
             auto_commit,
@@ -10201,7 +10366,13 @@ mod tests {
             Ok(_) => panic!("a changed security mechanism must be rejected"),
             Err(error) => error,
         };
-        assert!(error.to_string().contains("selected security mechanism 4"));
+        assert_eq!(error.kind, Db2ErrorKind::Unsupported);
+        assert!(
+            error
+                .to_string()
+                .contains("rejected security mechanism 3; the server accepts 4"),
+            "{error}"
+        );
         server.await.unwrap();
     }
 
@@ -10214,6 +10385,7 @@ mod tests {
             config: Config::default(),
             database: String::new(),
             security_mechanism: 3,
+            negotiated_security_mechanism: 3,
             query_block_size: 65_535,
             correlation_id: 1,
             auto_commit: true,
@@ -10248,6 +10420,7 @@ mod tests {
             config: Config::default(),
             database: String::new(),
             security_mechanism: 3,
+            negotiated_security_mechanism: 3,
             query_block_size: 65_535,
             correlation_id: 1,
             auto_commit: true,
@@ -10294,6 +10467,7 @@ mod tests {
             config: Config::default(),
             database: String::new(),
             security_mechanism: 3,
+            negotiated_security_mechanism: 3,
             query_block_size: 65_535,
             correlation_id: 1,
             auto_commit: true,
@@ -10343,6 +10517,7 @@ mod tests {
             config: Config::default(),
             database: String::new(),
             security_mechanism: 3,
+            negotiated_security_mechanism: 3,
             query_block_size: 65_535,
             correlation_id: 1,
             auto_commit: true,
@@ -11200,7 +11375,7 @@ mod tests {
         let mut session = Db2Session::connect(config).await.unwrap();
         // The tests module can reach the private field to model a mechanism-9 session
         // without repeating the full DH handshake here.
-        session.security_mechanism = 9;
+        session.negotiated_security_mechanism = 9;
         let error = session
             .switch_user_with_password("db2test2", "secret")
             .await
@@ -13730,6 +13905,7 @@ mod tests {
             config: Config::default(),
             database: "TESTDB".into(),
             security_mechanism: 3,
+            negotiated_security_mechanism: 3,
             query_block_size: 1024,
             correlation_id: 1,
             auto_commit: true,

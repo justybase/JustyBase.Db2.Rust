@@ -6,6 +6,18 @@ This guide collects operational details that are intentionally kept out of the m
 
 The driver accepts URL-style Db2 DSNs and a documented subset of IBM CLI-style key/value strings. New connections use server-side password authentication by default. Unsupported authentication or security modes fail during configuration validation rather than silently changing behavior.
 
+Authentication is selected with `security_mechanism` (or `secmec`) in a URL query or key/value DSN, or with `Authentication=`:
+
+- Not set (the default) requests `3` first. If the server refuses it and lists `9` or `7` (for example `AUTHENTICATION=SERVER_ENCRYPT`), the driver sends a second `ACCSEC` on the same connection with `9`, or `7` when `9` is not listed. Nothing else is followed, and no credentials are sent before the server accepts a mechanism.
+- `3` (`USRIDPWD`, `Authentication=SERVER`) sends the user ID and password without DRDA credential encryption.
+- `7` (`USRENCPWD`, also `usrencpwd` or `encrypted_password_security`) sends the user ID in clear text and encrypts only the password with DES. It needs a server with `AUTHENTICATION=SERVER_ENCRYPT`.
+- `9` (`EUSRIDPWD`) encrypts both user ID and password; `Authentication=SERVER_ENCRYPT` continues to select this mechanism.
+- `11` uses the caller-provided GSSAPI token (see `KERBEROS-STATUS.md`).
+
+An explicitly configured mechanism (including `3` and `Authentication=SERVER`) is never changed. When the server rejects it, `ACCSECRD` lists the mechanisms it accepts (for example `7, 9, 10` on `SERVER_ENCRYPT`, `3, 5` on `SERVER`) and the connection fails with `Db2ErrorKind::Unsupported` naming them, before any `SECCHK` is sent. A failed encrypted authentication is never retried with mechanism 3, and the `switch_user_with_password` SECCHK fallback stays refused after an automatic switch to an encrypting mechanism.
+
+Mechanism 7 requests DES (`ENCALG=1`). A server selecting AES (`ENCALG=2`) or any other algorithm fails closed with `Db2ErrorKind::Unsupported` before credentials are sent. DRDA Diffie–Hellman credential encryption does not authenticate the peer and is vulnerable to man-in-the-middle attacks; use TLS on untrusted networks.
+
 Use TLS for credentials in transit. The maintained TLS qualification profile validates TLS 1.2 and 1.3 behavior.
 
 ## Pooling and reset policy

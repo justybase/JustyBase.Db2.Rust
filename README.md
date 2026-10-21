@@ -31,6 +31,7 @@ Native asynchronous Rust driver for **IBM Db2 LUW**, speaking DRDA/DDM directly 
 | TCP connections | ✅ | Native Tokio transport |
 | TLS 1.2 / 1.3 | ✅ | Certificate validation enabled |
 | Password authentication | ✅ | SECMEC 3 verified |
+| SECMEC 7 | ✅ | Clear user ID and DES-encrypted password (`USRENCPWD`); verified on Db2 11.5.8; AES selection fails closed |
 | SECMEC 9 | ✅ | Encrypted user/password exchange |
 | Kerberos / GSSAPI | 🧪 | Caller-supplied token path; see `docs/KERBEROS-STATUS.md` |
 | Direct SQL / prepared SQL | ✅ | Query and execute APIs |
@@ -44,6 +45,8 @@ Native asynchronous Rust driver for **IBM Db2 LUW**, speaking DRDA/DDM directly 
 | Query cancellation | ✅ | DRDA SQL interrupt path |
 | Trusted-context switching | 🧪 | Requires matching server configuration |
 | IBM CLI dependency | ❌ | Not required at runtime |
+
+Use `security_mechanism=7` (also `secmec=7`, `usrencpwd` or `encrypted_password_security`) to request DRDA `USRENCPWD` against a server with `AUTHENTICATION=SERVER_ENCRYPT`; `Authentication=SERVER_ENCRYPT` continues to request mechanism 9. When `security_mechanism` is not set, the driver requests mechanism 3 and, if the server refuses it and lists an encrypting mechanism, retries the key exchange with 9 (or 7) on the same connection, as IBM CLI does; no credentials are sent before that. An explicitly configured mechanism is never changed. See [the driver guide](docs/DRIVER-GUIDE.md#connection-and-authentication).
 
 `✅` means implemented and covered by automated tests. `🧪` means environment- or server-configuration-dependent and requires explicit validation.
 
@@ -59,7 +62,7 @@ The maintained live qualification baseline is Db2 LUW 12.1.5 on Linux x64. Windo
 
 ```toml
 [dependencies]
-justybase-db2 = "0.1.0-alpha.2"
+justybase-db2 = "0.1.0-alpha.3"
 ```
 
 In Rust source code import the crate as `justybase_db2`.

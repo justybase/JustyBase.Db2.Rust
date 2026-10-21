@@ -4,6 +4,19 @@ All notable public changes to this project will be documented here.
 
 The project follows Semantic Versioning.
 
+## 0.1.0-alpha.3 - 2026-10-21
+
+### Added
+
+- DRDA `USRENCPWD` (SECMEC 7) authentication: `security_mechanism=7` (`usrencpwd`, `encrypted_password_security`, `secmec7`) sends a clear user ID and the DES-CBC-encrypted password in `SECCHK/SECTKN`, with the client DH key in `ACCSEC` (`ENCALG=1`) and the IV taken from the CP500 user ID. AES (`ENCALG=2`) and other algorithms fail closed before credentials are sent. New experimental helper `security::encrypt_usrencpwd` (recorded in the API snapshot). Opt-in live tests `tests/secmec7_live.rs` (`DB2_SECMEC7_TEST_DSN`).
+
+### Changed
+
+- A connection without a configured `security_mechanism` now follows a server that refuses the plaintext default: when `ACCSECRD` lists `9` or `7` (Db2 `AUTHENTICATION=SERVER_ENCRYPT`), the driver sends a second `ACCSEC` on the same connection with `9`, else `7`, before any credentials are sent. An explicitly configured mechanism, including `3`, is never changed, and a rejection of the retried mechanism ends the handshake.
+- `ACCSECRD`'s SECMEC and ENCALG parameters are decoded as lists. A rejected mechanism fails with `Db2ErrorKind::Unsupported` (previously `Other`) naming every mechanism the server accepts plus `SECCHKCD` (`DB2 rejected security mechanism 3 (SECCHKCD=1); the server accepts 7, 9, 10`). A non-zero `SECCHKCD` for the requested mechanism fails with `AuthenticationFailed` before `SECCHK`.
+- The `switch_user_with_password` SECCHK fallback checks the mechanism actually negotiated, so it stays refused after an automatic switch.
+- Verified live against Db2 LUW 11.5.8.0 with `AUTHENTICATION=SERVER_ENCRYPT`.
+
 ## 0.1.0-alpha.2 - 2026-10-15
 
 Second alpha release of `justybase-db2`.

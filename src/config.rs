@@ -391,12 +391,14 @@ fn is_true(value: &str) -> bool {
 fn parse_security_mechanism(value: &str) -> Result<u16, ConfigError> {
     match value.trim().to_ascii_lowercase().as_str() {
         "server" | "usridpwd" | "plaintext" | "secmec3" | "3" => Ok(3),
+        "usrencpwd" | "encrypted_password_security" | "secmec7" | "7" => Ok(7),
         "server_encrypt" | "eusridpwd" | "dh_encrypted_password" | "secmec9" | "9" => Ok(9),
         "kerberos" | "gssapi" | "gssplugin" | "secmec11" | "11" => Ok(11),
         "0" => Ok(0),
         _ => match value.trim().parse::<u16>() {
             Ok(0) => Ok(0),
             Ok(3) => Ok(3),
+            Ok(7) => Ok(7),
             Ok(9) => Ok(9),
             Ok(11) => Ok(11),
             _ => Err(unsupported_authentication(value)),
@@ -406,7 +408,7 @@ fn parse_security_mechanism(value: &str) -> Result<u16, ConfigError> {
 
 fn unsupported_authentication(value: &str) -> ConfigError {
     ConfigError(format!(
-        "unsupported DB2 authentication mode '{value}'; supported modes are Authentication=SERVER (3), Authentication=SERVER_ENCRYPT / security_mechanism=9 (EUSRIDPWD), and security_mechanism=11 (Kerberos/GSSAPI with gssapi_token_file)"
+        "unsupported DB2 authentication mode '{value}'; supported modes are Authentication=SERVER (3), security_mechanism=7 (USRENCPWD), Authentication=SERVER_ENCRYPT / security_mechanism=9 (EUSRIDPWD), and security_mechanism=11 (Kerberos/GSSAPI with gssapi_token_file)"
     ))
 }
 
@@ -882,7 +884,8 @@ mod tests {
             "Authentication=CERTIFICATE",
             "security_mechanism=4",
             "security_mechanism=6",
-            "security_mechanism=7",
+            "security_mechanism=encrypted_password",
+            "security_mechanism=usrenpwd",
             "security_mechanism=10",
             "security_mechanism=12",
             "security_mechanism=garbage",
@@ -917,6 +920,10 @@ mod tests {
             ("Authentication=SERVER_ENCRYPT", 9),
             ("Authentication=KERBEROS", 11),
             ("Authentication=GSSPLUGIN", 11),
+            ("security_mechanism=7", 7),
+            ("security_mechanism=usrencpwd", 7),
+            ("security_mechanism=ENCRYPTED_PASSWORD_SECURITY", 7),
+            ("secmec=secmec7", 7),
             ("security_mechanism=9", 9),
             ("security_mechanism=dh_encrypted_password", 9),
             ("security_mechanism=11", 11),

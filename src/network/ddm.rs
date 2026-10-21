@@ -307,9 +307,13 @@ pub fn pack_accsec(
     database: &str,
     security: SecurityMechanism,
     token: &[u8],
+    encryption_algorithm: Option<u16>,
 ) -> Result<Vec<u8>, String> {
     let secmec = pack_u16(cp::SECMEC, security as u16);
     let db = pack_string(cp::RDBNAM, database, StringEncoding::Cp500)?;
+    let encalg = encryption_algorithm
+        .map(|algorithm| pack_u16(cp::ENCALG, algorithm))
+        .unwrap_or_default();
     let token = if token.is_empty() {
         Vec::new()
     } else {
@@ -317,7 +321,7 @@ pub fn pack_accsec(
     };
     Ok(pack_ddm_object(
         cp::ACCSEC,
-        &concat(&[&secmec, &db, &token]),
+        &concat(&[&secmec, &db, &encalg, &token]),
     ))
 }
 
@@ -369,6 +373,29 @@ pub fn pack_secchk_eusridpwd(
             &pack_u16(cp::SECMEC, 9),
             &db,
             &pack_bytes(cp::SECTKN, encrypted_userid),
+            &pack_bytes(cp::SECTKN, encrypted_password),
+        ]),
+    ))
+}
+
+/// Builds the USRENCPWD (SECMEC 7) SECCHK: cleartext USRID plus one SECTKN
+/// carrying the DES-CBC-encrypted password (Derby's layout). The client
+/// Diffie-Hellman public key already travelled in ACCSEC. Verified against
+/// Db2 LUW SERVER_ENCRYPT: an encrypted PASSWORD parameter instead of SECTKN
+/// is rejected with SECCHKCD=16, and an extra SECTKN with AGNPRMRM.
+pub fn pack_secchk_usrencpwd(
+    database: &str,
+    user: &str,
+    encrypted_password: &[u8],
+) -> Result<Vec<u8>, String> {
+    let db = pack_string(cp::RDBNAM, database, StringEncoding::Cp500)?;
+    let user = pack_string(cp::USRID, user, StringEncoding::Cp500)?;
+    Ok(pack_ddm_object(
+        cp::SECCHK,
+        &concat(&[
+            &pack_u16(cp::SECMEC, 7),
+            &db,
+            &user,
             &pack_bytes(cp::SECTKN, encrypted_password),
         ]),
     ))
@@ -1846,7 +1873,7 @@ mod tests {
 
     #[test]
     fn packs_security_package_and_sql_objects() {
-        let accsec = pack_accsec("TESTDB", SecurityMechanism::USRIDPWD, &[1, 2]).unwrap();
+        let accsec = pack_accsec("TESTDB", SecurityMechanism::USRIDPWD, &[1, 2], None).unwrap();
         let params = parse_ddm_parameters(&accsec[4..]).unwrap();
         assert_eq!(
             u16::from_be_bytes([params[&cp::SECMEC][0], params[&cp::SECMEC][1]]),

@@ -16,6 +16,7 @@ impl CodePoint {
             0x1440 => "SECMGR",
             0x1196 => "SECMGRNM",
             0x11DC => "SECTKN",
+            0x1909 => "ENCALG",
             0x11A0 => "USRID",
             0x11A1 => "PASSWORD",
             0x11DE => "NEWPASSWORD",
@@ -229,6 +230,7 @@ pub const SECMEC: CodePoint = CodePoint(0x11A2);
 pub const SECMGR: CodePoint = CodePoint(0x1440);
 pub const SECMGRNM: CodePoint = CodePoint(0x1196);
 pub const SECTKN: CodePoint = CodePoint(0x11DC);
+pub const ENCALG: CodePoint = CodePoint(0x1909);
 pub const USRID: CodePoint = CodePoint(0x11A0);
 pub const PASSWORD: CodePoint = CodePoint(0x11A1);
 pub const NEWPASSWORD: CodePoint = CodePoint(0x11DE);
