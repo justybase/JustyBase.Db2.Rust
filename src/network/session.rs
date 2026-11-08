@@ -3,6 +3,7 @@ use crate::config::{Config, parse_dsn};
 use crate::converters::decfloat::decode_dfp;
 use crate::converters::ebcdic::{decode_cp500, encode_cp500};
 use crate::converters::sql_dta::{EncodedExternalData, build_sql_dta_with_inputs};
+use crate::error::Db2OperationOutcome;
 pub use crate::error::{Db2BatchError, Db2Error, Db2ErrorKind};
 use crate::import::{
     Db2ImportError, Db2ImportOptions, Db2ImportPolicy, Db2ImportProgress, Db2ImportTarget,
@@ -1709,7 +1710,12 @@ impl Db2InterruptHandle {
         let duration = timeout_duration(self.config.timeout_ms);
         timeout(duration, self.send_interrupt())
             .await
-            .map_err(|_| Db2Error::other("DB2 interrupt request timed out".into()))?
+            .map_err(|_| {
+                Db2Error::timeout(
+                    "DB2 interrupt request timed out",
+                    Db2OperationOutcome::Unknown,
+                )
+            })?
     }
 
     async fn send_interrupt(&self) -> Result<(), Db2Error> {
@@ -1852,22 +1858,40 @@ where
                         Ok(original_result) => original_result,
                         Err(_) => {
                             coordinator.poisoned.store(true, Ordering::Release);
-                            Err(Db2Error::other(
-                                "DB2 command deadline expired; SQLINTR was acknowledged but the original command did not complete before cleanup timed out".into()
+                            let outcome = if coordinator.exchange_pending.load(Ordering::Acquire) {
+                                Db2OperationOutcome::Unknown
+                            } else {
+                                Db2OperationOutcome::NotStarted
+                            };
+                            Err(Db2Error::timeout(
+                                "DB2 command deadline expired; SQLINTR was acknowledged but the original command did not complete before cleanup timed out",
+                                outcome,
                             ))
                         }
                     }
                 }
                 Ok(Err(error)) => {
                     coordinator.poisoned.store(true, Ordering::Release);
-                    Err(Db2Error::other(format!(
-                        "DB2 command deadline expired and SQLINTR was not confirmed: {error}"
-                    )))
+                    let outcome = if coordinator.exchange_pending.load(Ordering::Acquire) {
+                        Db2OperationOutcome::Unknown
+                    } else {
+                        Db2OperationOutcome::NotStarted
+                    };
+                    Err(Db2Error::timeout(
+                        format!("DB2 command deadline expired and SQLINTR was not confirmed: {error}"),
+                        outcome,
+                    ))
                 }
                 Err(_) => {
                     coordinator.poisoned.store(true, Ordering::Release);
-                    Err(Db2Error::other(
-                        "DB2 command deadline expired and the SQLINTR acknowledgment timed out".into()
+                    let outcome = if coordinator.exchange_pending.load(Ordering::Acquire) {
+                        Db2OperationOutcome::Unknown
+                    } else {
+                        Db2OperationOutcome::NotStarted
+                    };
+                    Err(Db2Error::timeout(
+                        "DB2 command deadline expired and the SQLINTR acknowledgment timed out",
+                        outcome,
                     ))
                 }
             }
@@ -1943,14 +1967,22 @@ impl Db2Session {
         )
         .await
         .map_err(|_| {
-            Db2Error::other(format!(
-                "DB2 TCP connection timed out after {} ms",
-                duration.as_millis()
-            ))
-        })??;
+            Db2Error::timeout(
+                format!(
+                    "DB2 TCP connection timed out after {} ms",
+                    duration.as_millis()
+                ),
+                Db2OperationOutcome::NotStarted,
+            )
+        })?
+        .map_err(|error| Db2Error::from(error).with_outcome(Db2OperationOutcome::NotStarted))?;
         socket.set_nodelay(true)?;
         let stream: BoxStream = if config.use_ssl {
-            Box::new(connect_tls(socket, &config).await?)
+            Box::new(
+                connect_tls(socket, &config)
+                    .await
+                    .map_err(|error| error.with_outcome(Db2OperationOutcome::NotStarted))?,
+            )
         } else {
             Box::new(socket)
         };
@@ -1996,10 +2028,10 @@ impl Db2Session {
             interrupt_coordinator: Arc::new(InterruptCoordinator::default()),
         };
         let result = timeout(duration, session.handshake()).await.map_err(|_| {
-            Db2Error::other(format!(
-                "DB2 handshake timed out after {} ms",
-                duration.as_millis()
-            ))
+            Db2Error::timeout(
+                format!("DB2 handshake timed out after {} ms", duration.as_millis()),
+                Db2OperationOutcome::Unknown,
+            )
         })?;
         if let Err(error) = result {
             session.closed = true;
@@ -6779,16 +6811,31 @@ async fn connect_tls(
     } else {
         builder.with_no_client_auth()
     };
-    let name = ServerName::try_from(config.host.clone())
-        .map_err(|_| Db2Error::other("DB2 TLS hostname is invalid".into()))?;
+    let name = ServerName::try_from(config.host.clone()).map_err(|_| {
+        Db2Error::new(
+            Db2ErrorKind::InvalidConfiguration,
+            "DB2 TLS hostname is invalid",
+        )
+    })?;
     let connector = TlsConnector::from(std::sync::Arc::new(client));
     timeout(
         timeout_duration(config.timeout_ms),
         connector.connect(name, socket),
     )
     .await
-    .map_err(|_| Db2Error::other("DB2 TLS handshake timed out".into()))?
-    .map_err(|error| Db2Error::other(format!("DB2 TLS handshake failed: {error}")))
+    .map_err(|_| {
+        Db2Error::timeout(
+            "DB2 TLS handshake timed out",
+            Db2OperationOutcome::NotStarted,
+        )
+    })?
+    .map_err(|error| {
+        Db2Error::new(
+            Db2ErrorKind::Transport,
+            format!("DB2 TLS handshake failed: {error}"),
+        )
+        .with_outcome(Db2OperationOutcome::NotStarted)
+    })
 }
 
 fn decode_procedure_cursor_available(
@@ -10208,7 +10255,8 @@ mod tests {
         let utf8 = ddm::pack_bytes(cp::SRVDGN, diagnostic.as_bytes());
         let error = server_error(&utf8);
         assert_eq!(error.to_string(), diagnostic);
-        assert_eq!(error.kind, Db2ErrorKind::SqlServer);
+        assert_eq!(error.kind, Db2ErrorKind::OperationCancelled);
+        assert_eq!(error.outcome, Db2OperationOutcome::Confirmed);
         assert_eq!(error.sql_code, Some(-952));
         assert_eq!(error.sql_state.as_deref(), Some("57014"));
 
@@ -10220,7 +10268,8 @@ mod tests {
             .unwrap(),
         );
         let error = server_error(&ebcdic);
-        assert_eq!(error.kind, Db2ErrorKind::SqlServer);
+        assert_eq!(error.kind, Db2ErrorKind::OperationCancelled);
+        assert_eq!(error.outcome, Db2OperationOutcome::Confirmed);
         assert_eq!(error.sql_code, Some(-952));
         assert_eq!(error.sql_state.as_deref(), Some("57014"));
     }

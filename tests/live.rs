@@ -1,7 +1,7 @@
 use justybase_db2::{
     Db2ClientInfo, Db2CommandOptions, Db2Error, Db2ErrorKind, Db2ImportColumn, Db2ImportPolicy,
-    Db2ImportTarget, Db2InputParameter, Db2Parameter, Db2ParameterDirection, Db2Pool, Db2Session,
-    Db2Value, Db2ValueRef, Db2Warning,
+    Db2ImportTarget, Db2InputParameter, Db2OperationOutcome, Db2Parameter, Db2ParameterDirection,
+    Db2Pool, Db2Session, Db2Value, Db2ValueRef, Db2Warning,
 };
 use std::io;
 use std::pin::Pin;
@@ -1023,6 +1023,8 @@ async fn live_query_stream_interrupt_ends_the_open_cursor_and_preserves_the_sess
         error.to_string().contains("SQLCODE=-952 SQLSTATE=57014"),
         "{error}"
     );
+    assert_eq!(error.kind, Db2ErrorKind::OperationCancelled);
+    assert_eq!(error.outcome, Db2OperationOutcome::Confirmed);
     assert_eq!(
         db.query("VALUES 19").await.unwrap().rows,
         vec![vec![Db2Value::Integer(19)]]

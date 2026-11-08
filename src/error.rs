@@ -35,11 +35,19 @@ pub enum Db2ErrorKind {
     Protocol,
     /// A configured bound prevented the driver from materializing server data.
     ResourceLimit,
+    /// Db2 confirmed SQLCODE -952 / SQLSTATE 57014 for an interrupted operation.
+    OperationCancelled,
+    /// A connect, command or cancellation-settlement deadline expired.
+    Timeout,
+    /// A batch failed after earlier parameter sets may already have run.
+    BatchExecution,
     /// The requested feature or operation is not implemented for the active profile.
     Unsupported,
-    /// A driver error that does not fit another stable category.
+    /// Acquiring a pool lease exceeded its deadline.
     PoolTimeout,
+    /// The bounded pool waiter queue is full.
     PoolExhausted,
+    /// A driver error that does not fit another stable category.
     Other,
 }
 
@@ -95,6 +103,29 @@ impl Db2BatchError {
             rows_affected,
         }
     }
+
+    /// Stable wrapper kind: a failed set is a batch execution failure; a setup
+    /// failure retains the cause's more specific kind.
+    pub fn kind(&self) -> Db2ErrorKind {
+        if self.failed_parameter_set_index.is_some() {
+            Db2ErrorKind::BatchExecution
+        } else {
+            self.cause.kind
+        }
+    }
+
+    /// Strongest applicable outcome for the batch as a whole.
+    pub fn outcome(&self) -> Db2OperationOutcome {
+        if self.cause.outcome == Db2OperationOutcome::Confirmed {
+            return Db2OperationOutcome::Confirmed;
+        }
+        if self.failed_parameter_set_index.is_none()
+            || self.cause.outcome == Db2OperationOutcome::NotStarted
+        {
+            return Db2OperationOutcome::NotStarted;
+        }
+        Db2OperationOutcome::Unknown
+    }
 }
 
 impl fmt::Display for Db2BatchError {
@@ -140,8 +171,13 @@ impl Db2Error {
             kind,
             outcome: match kind {
                 Db2ErrorKind::InvalidConfiguration
+                | Db2ErrorKind::ConnectionClosed
+                | Db2ErrorKind::DatabaseNotFound
+                | Db2ErrorKind::AuthenticationFailed
+                | Db2ErrorKind::AuthorizationFailed
                 | Db2ErrorKind::PoolTimeout
-                | Db2ErrorKind::PoolExhausted => Db2OperationOutcome::NotStarted,
+                | Db2ErrorKind::PoolExhausted
+                | Db2ErrorKind::Unsupported => Db2OperationOutcome::NotStarted,
                 Db2ErrorKind::SqlServer => Db2OperationOutcome::Confirmed,
                 _ => Db2OperationOutcome::Unknown,
             },
@@ -150,6 +186,22 @@ impl Db2Error {
             sql_state: None,
             cleanup: None,
         }
+    }
+
+    /// Sets the phase-derived outcome while preserving the stable kind.
+    pub fn with_outcome(mut self, outcome: Db2OperationOutcome) -> Self {
+        self.outcome = outcome;
+        self
+    }
+
+    /// Creates a deadline error whose settlement phase is known.
+    pub fn timeout(message: impl Into<String>, outcome: Db2OperationOutcome) -> Self {
+        Self::new(Db2ErrorKind::Timeout, message).with_outcome(outcome)
+    }
+
+    /// Creates a cancellation error whose confirmation phase is known.
+    pub fn cancelled(message: impl Into<String>, outcome: Db2OperationOutcome) -> Self {
+        Self::new(Db2ErrorKind::OperationCancelled, message).with_outcome(outcome)
     }
 
     /// Attaches session-cleanup context without replacing the operation error.
@@ -178,8 +230,13 @@ impl Db2Error {
     }
 
     pub(crate) fn sql(code: i32, state: &str, message: &str) -> Self {
+        let kind = if code == -952 {
+            Db2ErrorKind::OperationCancelled
+        } else {
+            Db2ErrorKind::SqlServer
+        };
         let mut error = Self::new(
-            Db2ErrorKind::SqlServer,
+            kind,
             format!(
                 "DB2 SQLCODE={code} SQLSTATE={state}{}",
                 if message.is_empty() {
@@ -189,6 +246,7 @@ impl Db2Error {
                 }
             ),
         );
+        error.outcome = Db2OperationOutcome::Confirmed;
         error.sql_code = Some(code);
         error.sql_state = Some(state.to_owned());
         error
@@ -198,7 +256,9 @@ impl Db2Error {
         let sql_code = diagnostic_integer(&message, &["SQLCODE:", "SQLCODE="]);
         let sql_state = diagnostic_string(&message, &["SQLSTATE:", "SQLSTATE="])
             .filter(|value| value.len() == 5);
-        let kind = if sql_code.is_some() && sql_state.is_some() {
+        let kind = if sql_code == Some(-952) {
+            Db2ErrorKind::OperationCancelled
+        } else if sql_code.is_some() {
             Db2ErrorKind::SqlServer
         } else {
             Db2ErrorKind::ServerResponse
@@ -278,16 +338,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sql_error_has_structured_code_and_state_and_stable_display() {
+    fn confirmed_interrupt_is_an_operation_cancellation() {
         let error = Db2Error::sql(-952, "57014", "statement was interrupted");
 
-        assert_eq!(error.kind, Db2ErrorKind::SqlServer);
+        assert_eq!(error.kind, Db2ErrorKind::OperationCancelled);
+        assert_eq!(error.outcome, Db2OperationOutcome::Confirmed);
         assert_eq!(error.sql_code, Some(-952));
         assert_eq!(error.sql_state.as_deref(), Some("57014"));
         assert_eq!(
             error.to_string(),
             "DB2 SQLCODE=-952 SQLSTATE=57014 statement was interrupted"
         );
+    }
+
+    #[test]
+    fn server_diagnostic_maps_minus_952_to_confirmed_cancellation() {
+        let error = Db2Error::server_diagnostic("SQLCODE:-952 SQLSTATE:57014".into());
+        assert_eq!(error.kind, Db2ErrorKind::OperationCancelled);
+        assert_eq!(error.outcome, Db2OperationOutcome::Confirmed);
+        assert_eq!(error.sql_code, Some(-952));
+        assert_eq!(error.sql_state.as_deref(), Some("57014"));
+    }
+
+    #[test]
+    fn timeout_and_batch_outcomes_follow_the_operation_phase() {
+        let before_write = Db2Error::timeout("connect timed out", Db2OperationOutcome::NotStarted);
+        assert_eq!(before_write.kind, Db2ErrorKind::Timeout);
+        assert_eq!(before_write.outcome, Db2OperationOutcome::NotStarted);
+
+        let in_flight = Db2BatchError::new(
+            Db2Error::new(Db2ErrorKind::Transport, "socket closed"),
+            Some(2),
+            2,
+            2,
+        );
+        assert_eq!(in_flight.kind(), Db2ErrorKind::BatchExecution);
+        assert_eq!(in_flight.outcome(), Db2OperationOutcome::Unknown);
+
+        let setup = Db2BatchError::new(
+            Db2Error::new(Db2ErrorKind::InvalidConfiguration, "bad parameters"),
+            None,
+            0,
+            0,
+        );
+        assert_eq!(setup.kind(), Db2ErrorKind::InvalidConfiguration);
+        assert_eq!(setup.outcome(), Db2OperationOutcome::NotStarted);
+
+        let confirmed =
+            Db2BatchError::new(Db2Error::sql(-803, "23505", "duplicate"), Some(1), 1, 1);
+        assert_eq!(confirmed.outcome(), Db2OperationOutcome::Confirmed);
     }
 
     #[test]

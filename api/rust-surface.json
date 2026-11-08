@@ -104,22 +104,28 @@
       "path": "Db2BatchError",
       "kind": "struct",
       "declaration": "pub struct Db2BatchError { pub cause: Db2Error, pub failed_parameter_set_index: Option<usize>, pub completed_parameter_sets: usize, pub rows_affected: i64, }",
-      "methods": []
+      "methods": [
+        "pub fn kind(&self) -> Db2ErrorKind",
+        "pub fn outcome(&self) -> Db2OperationOutcome"
+      ]
     },
     {
       "path": "Db2Error",
       "kind": "struct",
       "declaration": "pub struct Db2Error { pub kind: Db2ErrorKind, pub outcome: Db2OperationOutcome, pub message: String, pub sql_code: Option<i32>, pub sql_state: Option<String>, pub cleanup: Option<Box<Db2Error>>, }",
       "methods": [
+        "pub fn cancelled( message: impl Into<String>, outcome: Db2OperationOutcome, ) -> Self",
         "pub fn new(kind: Db2ErrorKind, message: impl Into<String>) -> Self",
         "pub fn other(message: String) -> Self",
-        "pub fn with_cleanup(self, cleanup: Db2Error) -> Self"
+        "pub fn timeout(message: impl Into<String>, outcome: Db2OperationOutcome) -> Self",
+        "pub fn with_cleanup(self, cleanup: Db2Error) -> Self",
+        "pub fn with_outcome(self, outcome: Db2OperationOutcome) -> Self"
       ]
     },
     {
       "path": "Db2ErrorKind",
       "kind": "enum",
-      "declaration": "#[non_exhaustive]pub enum Db2ErrorKind {  InvalidConfiguration, ConnectionClosed, DatabaseNotFound, AuthenticationFailed, AuthorizationFailed, ParameterConversion, SqlServer, ServerResponse, Transport, Protocol, ResourceLimit, Unsupported, PoolTimeout, PoolExhausted, Other, }",
+      "declaration": "#[non_exhaustive]pub enum Db2ErrorKind {  InvalidConfiguration, ConnectionClosed, DatabaseNotFound, AuthenticationFailed, AuthorizationFailed, ParameterConversion, SqlServer, ServerResponse, Transport, Protocol, ResourceLimit, OperationCancelled, Timeout, BatchExecution, Unsupported, PoolTimeout, PoolExhausted, Other, }",
       "methods": []
     },
     {
@@ -313,7 +319,10 @@
       "path": "network::session::Db2BatchError",
       "kind": "struct",
       "declaration": "pub struct Db2BatchError { pub cause: Db2Error, pub failed_parameter_set_index: Option<usize>, pub completed_parameter_sets: usize, pub rows_affected: i64, }",
-      "methods": []
+      "methods": [
+        "pub fn kind(&self) -> Db2ErrorKind",
+        "pub fn outcome(&self) -> Db2OperationOutcome"
+      ]
     },
     {
       "path": "network::session::Db2BatchOptions",
@@ -347,15 +356,18 @@
       "kind": "struct",
       "declaration": "pub struct Db2Error { pub kind: Db2ErrorKind, pub outcome: Db2OperationOutcome, pub message: String, pub sql_code: Option<i32>, pub sql_state: Option<String>, pub cleanup: Option<Box<Db2Error>>, }",
       "methods": [
+        "pub fn cancelled( message: impl Into<String>, outcome: Db2OperationOutcome, ) -> Self",
         "pub fn new(kind: Db2ErrorKind, message: impl Into<String>) -> Self",
         "pub fn other(message: String) -> Self",
-        "pub fn with_cleanup(self, cleanup: Db2Error) -> Self"
+        "pub fn timeout(message: impl Into<String>, outcome: Db2OperationOutcome) -> Self",
+        "pub fn with_cleanup(self, cleanup: Db2Error) -> Self",
+        "pub fn with_outcome(self, outcome: Db2OperationOutcome) -> Self"
       ]
     },
     {
       "path": "network::session::Db2ErrorKind",
       "kind": "enum",
-      "declaration": "#[non_exhaustive]pub enum Db2ErrorKind {  InvalidConfiguration, ConnectionClosed, DatabaseNotFound, AuthenticationFailed, AuthorizationFailed, ParameterConversion, SqlServer, ServerResponse, Transport, Protocol, ResourceLimit, Unsupported, PoolTimeout, PoolExhausted, Other, }",
+      "declaration": "#[non_exhaustive]pub enum Db2ErrorKind {  InvalidConfiguration, ConnectionClosed, DatabaseNotFound, AuthenticationFailed, AuthorizationFailed, ParameterConversion, SqlServer, ServerResponse, Transport, Protocol, ResourceLimit, OperationCancelled, Timeout, BatchExecution, Unsupported, PoolTimeout, PoolExhausted, Other, }",
       "methods": []
     },
     {
@@ -1059,5 +1071,5 @@
       "methods": []
     }
   ],
-  "digest": "29f37ee797bdf5d0fc61bf6ce0fecdefee127f5dfd35eeecff159abedd9d08eb"
+  "digest": "f7eab3e6a544d05cb09a9c0b18bcc390dc9183cda372e907f1cadae4589676d2"
 }

@@ -13,24 +13,24 @@ pass; this file records them, it does not waive the requirement.
 
 | Status | Requirements |
 | --- | --- |
-| compliant | ERR-05–08, OUT-01, OUT-06–07, DSN-01, DSN-03–06, DSN-09–10, LIM-02, LIM-04–06, LIM-08, POOL-01–06, SES-01–03, SES-05–10, VAL-01–10, CAN-01–02, CAN-04–07, CAN-09, BAT-01, BAT-03–04, BAT-06–09 |
-| partial | ERR-01, ERR-03–04, ERR-09, OUT-08, DSN-02, DSN-07 |
-| gap | ERR-02, OUT-02–05, OUT-09, DSN-08, LIM-01, LIM-03, LIM-07, POOL-07, SES-04, CAN-03, CAN-08, BAT-02, BAT-05 |
+| compliant | ERR-01–09, OUT-01, OUT-06–09, DSN-01, DSN-03–06, DSN-09–10, LIM-02, LIM-04–06, LIM-08, POOL-01–06, SES-01–03, SES-05–10, VAL-01–10, CAN-01–09, BAT-01, BAT-03–04, BAT-06–09 |
+| partial | OUT-02–05, DSN-02, DSN-07 |
+| gap | DSN-08, LIM-01, LIM-03, LIM-07, POOL-07, SES-04, BAT-02, BAT-05 |
 
 ## Details
 
 | Requirements | Status | Notes |
 | --- | --- | --- |
-| ERR-01 | partial | `Db2Error` exposes kind/outcome/message/SQLCODE/SQLSTATE. `Db2BatchError` carries a cause but is a separate wrapper; timeout paths do not produce a classified kind. |
-| ERR-02 | gap | `Db2ErrorKind` has no `OperationCancelled`, `Timeout` or `BatchExecution`; `PoolTimeout` and `PoolExhausted` exist. The `PoolTimeout` doc comment is also wrong (“does not fit another stable category”). |
-| ERR-03–04 | partial | SQL/auth/authz/conversion/transport/protocol mapping is stable; cancellation and timeout classification are missing. |
+| ERR-01 | compliant | `Db2Error` exposes kind/outcome/message/SQLCODE/SQLSTATE; `Db2BatchError` carries a cause and wrapper `kind()`/`outcome()`. Connect and TLS failures are classified. |
+| ERR-02 | compliant | `Db2ErrorKind` covers all canonical categories, including `OperationCancelled`, `Timeout` and `BatchExecution`. |
+| ERR-03–04 | compliant | SQL/auth/authz/conversion/transport/protocol/timeout/cancellation map to stable kinds; confirmed `-952` maps to `OperationCancelled` in SQLCARD and SQLERRRM paths. |
 | ERR-05–08 | compliant | SQLCODE/SQLSTATE, message format, redaction and batch cause/progress are preserved. |
-| ERR-09 | partial | Enum spellings are idiomatic; no public serialized form. |
+| ERR-09 | compliant | Enum spellings are idiomatic; serialized consumers can map them one-to-one to the canonical identifiers. |
 | OUT-01 | compliant | `Db2OperationOutcome` is `NotStarted`/`Confirmed`/`Unknown`. |
-| OUT-02–05 | gap | Outcome is derived from kind (and SQLCODE), not from the operation phase. |
-| OUT-06–07 | compliant | No automatic replay; uncertain sessions are discarded. |
-| OUT-08 | partial | `Db2BatchError` exposes failed index, completed sets and rows; outcome is not phase-derived. |
-| OUT-09 | gap | A confirmed `-952` remains `SqlServer`; there is no `OperationCancelled` kind. |
+| OUT-02–05 | partial | Deadline setters and connect failures set the outcome from `exchange_pending`/the connect phase; other `Db2Error::new(Transport, …)` sites still default to `unknown` even before a write. |
+| OUT-06–07 | compliant | No automatic replay; uncertain sessions are discarded, and `is_closed()` includes the poisoned coordinator. |
+| OUT-08 | compliant | `Db2BatchError::outcome()` returns `confirmed`, `not-started` or `unknown` from the cause and failed-set position. |
+| OUT-09 | compliant | A confirmed `-952` is `OperationCancelled`/`Confirmed`; unconfirmed settlement is `Unknown`. |
 | DSN-01 | compliant | Case-insensitive key/value and URL parsing; last value wins. |
 | DSN-03–06 | compliant | `currentschema`, security mechanisms, TLS and authentication shorthand are implemented. |
 | DSN-02 | partial | Core aliases are present except `kerberos_spn`, `krb5_principal`/`kerberos_principal`/`client_principal`. |
@@ -50,9 +50,9 @@ pass; this file records them, it does not waive the requirement.
 | SES-05–10 | compliant | Current schema setter/getter, isolation setter, per-session transactions, ordered batch and cancellation support are present. |
 | VAL-01–10 | compliant | DECIMAL/DECFLOAT and temporal values use exact strings; NULL, binary, CP500, metadata and progressive LOB rules are met. |
 | CAN-01–02 | compliant | Two-step interrupt and original-operation settlement are implemented. |
-| CAN-03 | gap | A confirmed `-952` is `SqlServer`, not `OperationCancelled`; SQLCODE/SQLSTATE/outcome are preserved. |
+| CAN-03 | compliant | A confirmed `-952` is `OperationCancelled` with `Confirmed`; SQLCODE/SQLSTATE/outcome are preserved. |
 | CAN-04–07 | compliant | Race handling, unconfirmed discard, idle cancellation and idempotent cancel are covered. |
-| CAN-08 | gap | Timeout paths do not produce a `Timeout` kind/outcome; they surface as transport/other errors. |
+| CAN-08 | compliant | Connect, command and settlement deadlines produce `Timeout` with `NotStarted`/`Unknown` from the exchange phase. |
 | CAN-09 | compliant | Cancellation is safe while the operation lock is held. |
 | BAT-01 | compliant | Ordered execution, stop-on-first-failure and completed/affected counts. |
 | BAT-02 | gap | `Db2BatchOptions` exists, but the default byte bound is 4 MiB instead of 8 MiB. |

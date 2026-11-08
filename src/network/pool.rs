@@ -526,9 +526,9 @@ impl Db2Pool {
         )
         .await
         .map_err(|_| {
-            Db2Error::new(
-                crate::Db2ErrorKind::Transport,
+            Db2Error::timeout(
                 "Db2 pool connection timed out",
+                crate::Db2OperationOutcome::NotStarted,
             )
         })??;
         self.inner.session_count.fetch_add(1, Ordering::AcqRel);

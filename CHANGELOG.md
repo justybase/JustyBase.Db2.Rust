@@ -11,6 +11,13 @@ The project follows Semantic Versioning.
 - Added the self-contained JDC v1 contract (`docs/DRIVER-CONTRACT.md`) and the
   repo-specific conformance record (`docs/DRIVER-CONTRACT-STATUS.md`). No API or
   behaviour changes.
+- Added `Db2ErrorKind::OperationCancelled`, `Db2ErrorKind::Timeout` and
+  `Db2ErrorKind::BatchExecution`; `Db2Error::sql`/`server_diagnostic` map `-952`
+  to a confirmed cancellation. `Db2Error::with_outcome`, `Db2Error::timeout`
+  and `Db2Error::cancelled` make the operation phase explicit, and
+  `Db2BatchError::kind`/`outcome` expose the wrapper classification. Connect,
+  handshake and TLS deadline failures are now `Timeout`/`Transport`. API snapshot
+  regenerated for the additive enum methods.
 
 ## 0.1.0-alpha.3 - 2026-10-21
 
