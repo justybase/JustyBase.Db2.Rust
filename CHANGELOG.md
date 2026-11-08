@@ -4,6 +4,14 @@ All notable public changes to this project will be documented here.
 
 The project follows Semantic Versioning.
 
+## Unreleased
+
+### Changed
+
+- Added the self-contained JDC v1 contract (`docs/DRIVER-CONTRACT.md`) and the
+  repo-specific conformance record (`docs/DRIVER-CONTRACT-STATUS.md`). No API or
+  behaviour changes.
+
 ## 0.1.0-alpha.3 - 2026-10-21
 
 ### Added

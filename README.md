@@ -58,6 +58,10 @@ Use `security_mechanism=7` (also `secmec=7`, `usrencpwd` or `encrypted_password_
 
 The maintained live qualification baseline is Db2 LUW 12.1.5 on Linux x64. Windows and macOS are continuously exercised by protocol/API smoke tests. See [Qualification and compatibility](docs/QUALIFICATION.md).
 
+## Cross-driver contract
+
+The observable behaviour implemented here is defined by [JDC v1](docs/DRIVER-CONTRACT.md); known gaps are recorded in [the status file](docs/DRIVER-CONTRACT-STATUS.md).
+
 ## Installation
 
 ```toml
