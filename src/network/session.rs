@@ -2243,9 +2243,7 @@ impl Db2Session {
                 format!("invalid DB2 database name {database:?}"),
             ));
         }
-        if target == self.config.database {
-            return Ok(());
-        }
+        self.ensure_open()?;
         if !self.auto_commit {
             return Err(Db2Error::other(
                 "cannot change database while a transaction is active".to_string(),
@@ -2256,6 +2254,9 @@ impl Db2Session {
                 "cannot change database on a pooled session; acquire with the target DSN instead"
                     .to_string(),
             ));
+        }
+        if target == self.config.database {
+            return Ok(());
         }
         let mut config = self.config.clone();
         config.database = target.to_owned();
@@ -3742,13 +3743,13 @@ impl Db2Session {
         command_options: Db2CommandOptions,
         batch_options: Db2BatchOptions,
     ) -> Result<i64, Db2BatchError> {
+        if let Err(error) = batch_options.validate() {
+            return Err(Db2BatchError::new(error, None, 0, 0));
+        }
         if parameter_sets.is_empty() {
             return Ok(0);
         }
         self.pool_dirty.unknown = true;
-        if let Err(error) = batch_options.validate() {
-            return Err(Db2BatchError::new(error, None, 0, 0));
-        }
         let _operation = self.interrupt_coordinator.begin_operation().await;
         let interrupt = self.deadline_interrupt_handle();
         let mut completed = 0;
@@ -8453,6 +8454,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn batch_validates_limits_before_an_empty_parameter_set_shortcut() {
+        let mut session = dummy_session(true);
+        let error = session
+            .execute_batch_with_params_and_batch_options(
+                "INSERT INTO T VALUES (?)",
+                &[],
+                Db2BatchOptions::new(0, 1024),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error.cause.kind, Db2ErrorKind::InvalidConfiguration);
+        assert_eq!(error.failed_parameter_set_index, None);
+        assert!(!session.is_closed());
+    }
+
+    #[tokio::test]
     async fn batch_rejects_limits_outside_the_correlation_id_range_before_io() {
         let mut session = dummy_session(true);
         let error = session
@@ -11597,18 +11614,25 @@ mod tests {
             assert_eq!(error.kind, Db2ErrorKind::InvalidConfiguration);
             assert!(!session.is_closed());
         }
+        session.change_database("TESTDB").await.unwrap();
         session.set_auto_commit(false);
-        let error = session.change_database("NEWDB").await.unwrap_err();
-        assert!(error.to_string().contains("transaction"), "{error}");
-        assert!(!session.is_closed());
+        for target in ["NEWDB", "TESTDB"] {
+            let error = session.change_database(target).await.unwrap_err();
+            assert!(error.to_string().contains("transaction"), "{error}");
+            assert!(!session.is_closed());
+        }
         session.set_auto_commit(true);
         session.pool_baseline_captured = true;
-        let error = session.change_database("NEWDB").await.unwrap_err();
-        assert!(error.to_string().contains("pooled"), "{error}");
-        assert!(!session.is_closed());
+        for target in ["NEWDB", "TESTDB"] {
+            let error = session.change_database(target).await.unwrap_err();
+            assert!(error.to_string().contains("pooled"), "{error}");
+            assert!(!session.is_closed());
+        }
         session.pool_baseline_captured = false;
 
         session.close().await.unwrap();
+        let error = session.change_database("TESTDB").await.unwrap_err();
+        assert_eq!(error.kind, Db2ErrorKind::ConnectionClosed);
         server.await.unwrap();
     }
 

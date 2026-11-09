@@ -22,10 +22,17 @@ The project follows Semantic Versioning.
   `krb5_principal`, plus all JDC Kerberos aliases (`kerberos_spn`,
   `kerberos_realm`, the principal spellings and the file keys). Unknown
   `krb5`/`kerberos`/`gssapi` keys fail closed, and an explicit empty schema is
-  rejected. `Db2Session::change_database` reconnects with a fresh handshake,
-  refuses a transaction or pooled lease before I/O, and leaves the session
-  closed on failure. `set_current_schema` now trims and validates its input.
+  rejected. `Config` is a public struct without `#[non_exhaustive]`, so adding
+  the public `krb5_principal` field is an intentional pre-1.0 break for
+  struct-literal construction; `Config::default()` and `parse_dsn` are
+  unaffected. `Db2Session::change_database` reconnects with a fresh handshake,
+  validates an open session, refuses a transaction or pooled lease before I/O,
+  and leaves the session closed on failure; a same-name switch is a no-op only
+  after those checks. `set_current_schema` now trims and validates its input.
   API snapshot regenerated for the additive members.
+- `execute_batch_with_params_and_options_and_limits` validates the batch bounds
+  before the empty-parameter-set shortcut, so invalid limits fail even when
+  there is nothing to send.
 - Aligned resource limits with JDC: limit DSN values now reject zero, negative,
   non-numeric and above-ceiling values with a configuration error; invalid
   `block_size` fails too. `Db2BatchOptions` defaults to 256 rows / 8 MiB, the

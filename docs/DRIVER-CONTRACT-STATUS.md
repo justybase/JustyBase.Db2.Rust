@@ -46,7 +46,7 @@ pass; this file records them, it does not waive the requirement.
 | POOL-01-06 | compliant | Defaults, admission errors, reset/discard and drain/shutdown match; `max_waiters = 0` is admitted. |
 | POOL-07 | compliant | `Db2PoolStats`/`stats()` expose total, idle, active, waiters, discarded sessions and acquire timeouts; individual getters remain available. |
 | SES-01–03 | compliant | Connect/close, prepare/execute and commit/rollback match. |
-| SES-04 | compliant | `change_database` validates the target before any I/O, refuses an active transaction or pooled lease, reconnects with a fresh handshake and leaves the session closed if the reconnect fails. |
+| SES-04 | compliant | `change_database` validates the target before any I/O, requires an open session, refuses an active transaction or pooled lease even for the current name, reconnects with a fresh handshake and leaves the session closed if the reconnect fails. |
 | SES-05–10 | compliant | Current schema setter/getter, isolation setter, per-session transactions, ordered batch and cancellation support are present. |
 | VAL-01–10 | compliant | DECIMAL/DECFLOAT and temporal values use exact strings; NULL, binary, CP500, metadata and progressive LOB rules are met. |
 | CAN-01–02 | compliant | Two-step interrupt and original-operation settlement are implemented. |
