@@ -22,7 +22,7 @@ Use TLS for credentials in transit. The maintained TLS qualification profile val
 
 ## Pooling and reset policy
 
-`Db2Pool` uses bounded physical sessions and bounded waiter admission. The pool tracks connection lifecycle, idle/lifetime limits and shutdown state.
+`Db2Pool` uses bounded physical sessions and bounded waiter admission. The pool tracks connection lifecycle, idle/lifetime limits and shutdown state. `Db2PoolStats`/`stats()` expose total, idle, active, waiter, discarded-session and acquire-timeout counters; the individual getters remain available.
 
 The default `PoolResetPolicy::Strict` validates relevant server session state before reuse. `PoolResetPolicy::Tracked` can avoid that validation round trip when an application guarantees it changes state only through the typed driver APIs.
 
@@ -55,7 +55,7 @@ The current alpha limits:
 - one materialized LOB to 16 MiB,
 - one materialized query result to 32 MiB.
 
-Values that exceed those limits fail rather than allocating without bound.
+Values that exceed those limits fail rather than allocating without bound. The fixed defaults are 64 MiB DSS, 64 MiB DDM, 256 MiB / 4096-packet reply chains, 16 MiB materialized LOB, 32 MiB materialized result, 1 GiB streamed LOB and 64 KiB chunks. The five DSN-tunable limits reject non-positive, non-numeric and above-ceiling values.
 
 ### Progressive row-stream values
 
@@ -111,7 +111,7 @@ Procedure result LOBs are handled conservatively because server profiles can rep
 
 The bounded row importer sends prepared INSERT operations. It is not IBM CLI LOAD.
 
-The importer supports atomic and checkpoint/commit-every-rows style policies. Batches are bounded by row and estimated encoded-byte limits. Progressive source LOBs can be staged in private temporary storage under the shared process spool quota before the destination operation advances.
+The importer supports atomic and checkpoint/commit-every-rows style policies. Batches are bounded by row and estimated encoded-byte limits; `Db2BatchOptions` defaults to 256 rows / 8 MiB, and `Db2ImportOptions` reports progress every 10,000 rows by default. Progressive source LOBs can be staged in private temporary storage under the shared process spool quota before the destination operation advances.
 
 `import_rows_with_options` with `Db2ImportOptions` additionally supports opt-in periodic progress reports (`notify_after_rows: Option<u64>`: the observer runs each time the source row count reaches a multiple of the interval, so returning an error rolls back the atomic transaction or stops `CommitEveryRows` at its last confirmed checkpoint), an exclusive `LOCK TABLE ... IN EXCLUSIVE MODE` for atomic imports (`table_lock`, rejected with checkpoint policies), and a per-batch write deadline (`command_timeout_ms`, zero keeps the session default).
 

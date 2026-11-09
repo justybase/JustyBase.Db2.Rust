@@ -23,6 +23,19 @@ struct PoolInner {
     semaphore: Arc<Semaphore>,
     closed: AtomicBool,
     session_count: AtomicUsize,
+    discarded_sessions: AtomicUsize,
+    acquire_timeouts: AtomicUsize,
+}
+
+/// A point-in-time snapshot of pool admission and lifecycle counters.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Db2PoolStats {
+    pub total_connections: usize,
+    pub idle_connections: usize,
+    pub active_connections: usize,
+    pub waiters: usize,
+    pub discarded_sessions: usize,
+    pub acquire_timeouts: usize,
 }
 
 /// Bounds physical sessions, admission and retained connection lifetime.
@@ -94,6 +107,14 @@ impl Drop for SessionCountGuard {
     }
 }
 
+impl PoolInner {
+    fn record_discarded(&self, count: usize) {
+        if count > 0 {
+            self.discarded_sessions.fetch_add(count, Ordering::AcqRel);
+        }
+    }
+}
+
 /// A bounded async pool. A `Db2PooledSession` holds one slot until it is dropped.
 #[derive(Clone)]
 pub struct Db2Pool {
@@ -131,7 +152,6 @@ impl Db2Pool {
     ) -> Result<Self, Db2Error> {
         if options.max_connections == 0
             || options.max_connections > Semaphore::MAX_PERMITS
-            || options.max_waiters == 0
             || options.acquire_timeout.is_zero()
             || options.connect_timeout.is_zero()
             || options.idle_timeout.is_zero()
@@ -140,7 +160,7 @@ impl Db2Pool {
         {
             return Err(Db2Error::new(
                 crate::Db2ErrorKind::InvalidConfiguration,
-                "Db2 pool capacities must be positive integers and intervals must be positive and supported by the runtime",
+                "Db2 pool max_connections must be positive, max_waiters non-negative, and intervals must be positive and supported by the runtime",
             ));
         }
         Ok(Self {
@@ -156,6 +176,8 @@ impl Db2Pool {
                 reaper_started: AtomicBool::new(false),
                 closed: AtomicBool::new(false),
                 session_count: AtomicUsize::new(0),
+                discarded_sessions: AtomicUsize::new(0),
+                acquire_timeouts: AtomicUsize::new(0),
             }),
         })
     }
@@ -172,6 +194,31 @@ impl Db2Pool {
 
     pub fn waiting_count(&self) -> usize {
         self.inner.waiters.load(Ordering::Acquire)
+    }
+
+    pub fn active_session_count(&self) -> usize {
+        self.session_count()
+            .saturating_sub(self.idle_session_count())
+    }
+
+    pub fn discarded_session_count(&self) -> usize {
+        self.inner.discarded_sessions.load(Ordering::Acquire)
+    }
+
+    pub fn acquire_timeout_count(&self) -> usize {
+        self.inner.acquire_timeouts.load(Ordering::Acquire)
+    }
+
+    pub fn stats(&self) -> Db2PoolStats {
+        let idle_connections = self.idle_session_count();
+        Db2PoolStats {
+            total_connections: self.session_count(),
+            idle_connections,
+            active_connections: self.session_count().saturating_sub(idle_connections),
+            waiters: self.waiting_count(),
+            discarded_sessions: self.discarded_session_count(),
+            acquire_timeouts: self.acquire_timeout_count(),
+        }
     }
 
     fn start_reaper(&self) {
@@ -209,6 +256,7 @@ impl Db2Pool {
                         .fetch_sub(expired.len(), Ordering::AcqRel);
                     expired
                 };
+                inner.record_discarded(expired.len());
                 for mut entry in expired {
                     let _ = entry.session.close().await;
                 }
@@ -254,6 +302,7 @@ impl Db2Pool {
                 )
                 .await
                 .map_err(|_| {
+                    self.inner.acquire_timeouts.fetch_add(1, Ordering::AcqRel);
                     Db2Error::new(
                         crate::Db2ErrorKind::PoolTimeout,
                         "Db2 pool acquisition timed out",
@@ -299,6 +348,7 @@ impl Db2Pool {
                 } else {
                     let _ = session.close().await;
                     drop(count);
+                    self.inner.record_discarded(1);
                     if self.is_closed() {
                         return Err(Db2Error::connection_closed("Db2 pool is closed"));
                     }
@@ -311,6 +361,7 @@ impl Db2Pool {
                 let count = SessionCountGuard::new(self.inner.clone());
                 let _ = session.close().await;
                 drop(count);
+                self.inner.record_discarded(1);
                 if self.is_closed() {
                     return Err(Db2Error::connection_closed("Db2 pool is closed"));
                 }
@@ -323,6 +374,7 @@ impl Db2Pool {
             let mut session = session;
             let _ = session.close().await;
             drop(count);
+            self.inner.record_discarded(1);
             return Err(Db2Error::connection_closed("Db2 pool is closed"));
         }
         let abort = session.install_pool_abort();
@@ -538,12 +590,14 @@ impl Db2Pool {
         let mut count = SessionCountGuard::new(self.inner.clone());
         if self.is_closed() {
             let _ = session.close().await;
+            self.inner.record_discarded(1);
             return Err(Db2Error::connection_closed("Db2 pool is closed"));
         }
         // Record CURRENT SCHEMA/ISOLATION before the session reaches its first
         // caller. A baseline read failure discards the session without a lease.
         if let Err(error) = session.capture_pool_baseline().await {
             let _ = session.close().await;
+            self.inner.record_discarded(1);
             return Err(error);
         }
         count.disarm();
@@ -618,6 +672,7 @@ impl Db2PooledSession {
             || self.born.elapsed() >= self.inner.options.max_lifetime
         {
             let _ = session.close().await;
+            self.inner.record_discarded(1);
             return Ok(());
         }
         if self.inner.reset_policy == PoolResetPolicy::Tracked {
@@ -625,18 +680,21 @@ impl Db2PooledSession {
         }
         if let Err(error) = session.reset_for_pool().await {
             let _ = session.close().await;
+            self.inner.record_discarded(1);
             return Err(error);
         }
         let mut idle = match self.inner.idle.lock() {
             Ok(idle) => idle,
             Err(_) => {
                 let _ = session.close().await;
+                self.inner.record_discarded(1);
                 return Err(Db2Error::other("Db2 pool state is poisoned".into()));
             }
         };
         if self.inner.closed.load(Ordering::Acquire) {
             drop(idle);
             let _ = session.close().await;
+            self.inner.record_discarded(1);
             return Err(Db2Error::connection_closed("Db2 pool is closed"));
         }
         idle.push(IdleSession {
@@ -666,12 +724,14 @@ impl Drop for Db2PooledSession {
             || self.born.elapsed() >= self.inner.options.max_lifetime
         {
             self.inner.session_count.fetch_sub(1, Ordering::AcqRel);
+            self.inner.record_discarded(1);
             drop(session);
             return;
         }
         if let Ok(mut idle) = self.inner.idle.lock() {
             if self.inner.closed.load(Ordering::Acquire) {
                 self.inner.session_count.fetch_sub(1, Ordering::AcqRel);
+                self.inner.record_discarded(1);
                 drop(session);
             } else {
                 idle.push(IdleSession {
@@ -682,6 +742,7 @@ impl Drop for Db2PooledSession {
             }
         } else {
             self.inner.session_count.fetch_sub(1, Ordering::AcqRel);
+            self.inner.record_discarded(1);
         }
     }
 }
@@ -725,6 +786,8 @@ mod tests {
             Ok(_) => panic!("must time out"),
         };
         assert_eq!(error.kind, Db2ErrorKind::PoolTimeout);
+        assert_eq!(pool.acquire_timeout_count(), 1);
+        assert_eq!(pool.stats().acquire_timeouts, 1);
         assert_eq!(pool.waiting_count(), 0);
         let queued_pool = pool.clone();
         let queued = tokio::spawn(async move { queued_pool.acquire().await });
@@ -745,8 +808,27 @@ mod tests {
             Ok(_) => panic!("zero capacity must fail"),
             Err(error) => error,
         };
-        assert!(error.to_string().contains("positive integer"));
+        assert!(
+            error
+                .to_string()
+                .contains("max_connections must be positive")
+        );
         assert_eq!(error.kind, Db2ErrorKind::InvalidConfiguration);
+    }
+
+    #[test]
+    fn pool_allows_a_zero_waiter_bound() {
+        let pool = Db2Pool::new_with_options(
+            Config::default(),
+            Db2PoolOptions {
+                max_connections: 1,
+                max_waiters: 0,
+                ..Default::default()
+            },
+            PoolResetPolicy::Strict,
+        )
+        .unwrap();
+        assert_eq!(pool.stats().acquire_timeouts, 0);
     }
 
     #[tokio::test]

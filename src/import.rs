@@ -151,7 +151,7 @@ impl Default for Db2ImportOptions {
                 max_batch_rows: 256,
                 max_batch_bytes: 8 * 1024 * 1024,
             },
-            notify_after_rows: None,
+            notify_after_rows: Some(10_000),
             table_lock: false,
             command_timeout_ms: 0,
         }
@@ -395,6 +395,21 @@ mod tests {
 
     #[test]
     fn import_options_validate_notify_interval_and_table_lock_policy() {
+        let defaults = Db2ImportOptions::default();
+        assert_eq!(defaults.notify_after_rows, Some(10_000));
+        match defaults.policy {
+            Db2ImportPolicy::Atomic {
+                max_batch_rows,
+                max_batch_bytes,
+            } => {
+                assert_eq!(max_batch_rows, 256);
+                assert_eq!(max_batch_bytes, 8 * 1024 * 1024);
+            }
+            other => panic!("unexpected default import policy: {other:?}"),
+        }
+        let batch = crate::Db2BatchOptions::default();
+        assert_eq!(batch.max_rows, 256);
+        assert_eq!(batch.max_encoded_bytes, 8 * 1024 * 1024);
         assert!(Db2ImportOptions::default().validate().is_ok());
         assert!(
             Db2ImportOptions {

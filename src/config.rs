@@ -332,27 +332,46 @@ fn apply_param(config: &mut Config, key: &str, value: &str) -> Result<(), Config
             }
         }
         "block_size" | "blocksize" | "qryblksz" => {
-            if let Ok(size) = value.parse::<usize>()
-                && (1_024..=1_048_576).contains(&size)
-            {
-                config.block_size = size;
+            let size = value.parse::<usize>().map_err(|_| {
+                ConfigError("DB2 block_size must be an integer between 1024 and 1048576".into())
+            })?;
+            if !(1_024..=1_048_576).contains(&size) {
+                return Err(ConfigError(
+                    "DB2 block_size must be an integer between 1024 and 1048576".into(),
+                ));
             }
+            config.block_size = size;
         }
-        "max_dss_size" | "maxdsssize" => {
-            set_positive_limit(&mut config.protocol_limits.max_dss_size, value)
-        }
-        "max_ddm_object_size" | "maxddmobjectsize" => {
-            set_positive_limit(&mut config.protocol_limits.max_ddm_object_size, value)
-        }
-        "max_reply_chain_bytes" | "maxreplychainbytes" => {
-            set_positive_limit(&mut config.protocol_limits.max_reply_chain_bytes, value)
-        }
-        "max_reply_chain_packets" | "maxreplychainpackets" => {
-            set_positive_limit(&mut config.protocol_limits.max_reply_chain_packets, value)
-        }
-        "max_materialized_lob_size" | "maxmaterializedlobsize" => {
-            set_positive_limit(&mut config.protocol_limits.max_materialized_lob_size, value)
-        }
+        "max_dss_size" | "maxdsssize" => set_positive_limit(
+            &mut config.protocol_limits.max_dss_size,
+            "max_dss_size",
+            value,
+            1024 * 1024 * 1024,
+        )?,
+        "max_ddm_object_size" | "maxddmobjectsize" => set_positive_limit(
+            &mut config.protocol_limits.max_ddm_object_size,
+            "max_ddm_object_size",
+            value,
+            1024 * 1024 * 1024,
+        )?,
+        "max_reply_chain_bytes" | "maxreplychainbytes" => set_positive_limit(
+            &mut config.protocol_limits.max_reply_chain_bytes,
+            "max_reply_chain_bytes",
+            value,
+            4 * 1024 * 1024 * 1024,
+        )?,
+        "max_reply_chain_packets" | "maxreplychainpackets" => set_positive_limit(
+            &mut config.protocol_limits.max_reply_chain_packets,
+            "max_reply_chain_packets",
+            value,
+            65_535,
+        )?,
+        "max_materialized_lob_size" | "maxmaterializedlobsize" => set_positive_limit(
+            &mut config.protocol_limits.max_materialized_lob_size,
+            "max_materialized_lob_size",
+            value,
+            1024 * 1024 * 1024,
+        )?,
         "security_mechanism" | "secmec" | "auth_mechanism" | "auth" => {
             config.security_mechanism = parse_security_mechanism(value)?;
         }
@@ -398,12 +417,24 @@ fn apply_param(config: &mut Config, key: &str, value: &str) -> Result<(), Config
     Ok(())
 }
 
-fn set_positive_limit(target: &mut usize, value: &str) {
-    if let Ok(limit) = value.parse::<usize>()
-        && limit > 0
-    {
-        *target = limit;
+fn set_positive_limit(
+    target: &mut usize,
+    name: &str,
+    value: &str,
+    ceiling: u64,
+) -> Result<(), ConfigError> {
+    let limit = value.parse::<usize>().map_err(|_| {
+        ConfigError(format!(
+            "DB2 {name} must be a positive integer no greater than {ceiling}"
+        ))
+    })?;
+    if limit == 0 || limit as u64 > ceiling {
+        return Err(ConfigError(format!(
+            "DB2 {name} must be a positive integer no greater than {ceiling}"
+        )));
     }
+    *target = limit;
+    Ok(())
 }
 
 fn is_true(value: &str) -> bool {
@@ -688,12 +719,11 @@ mod tests {
             parse_dsn("db2://u:p@host/TESTDB?port=70000").unwrap().port,
             50000
         );
-        assert_eq!(
-            parse_dsn("db2://u:p@host/TESTDB?block_size=512")
-                .unwrap()
-                .block_size,
-            65_535
-        );
+        for value in ["512", "1048577", "abc"] {
+            let error =
+                parse_dsn(&format!("db2://u:p@host/TESTDB?block_size={value}")).unwrap_err();
+            assert!(error.to_string().contains("block_size"), "{error}");
+        }
 
         let kv = parse_dsn("Database=TESTDB;Host=h;Port=50001;UID=u;PWD=p").unwrap();
         assert_eq!(
@@ -850,10 +880,64 @@ mod tests {
         assert_eq!(key_value.protocol_limits.max_dss_size, 512);
         assert_eq!(key_value.protocol_limits.max_reply_chain_packets, 3);
 
-        let ignored = parse_dsn("database=TESTDB;max_dss_size=0").unwrap();
+        for value in ["0", "-1", "abc", "1073741825"] {
+            let error = parse_dsn(&format!("database=TESTDB;max_dss_size={value}")).unwrap_err();
+            assert!(error.to_string().contains("max_dss_size"), "{error}");
+        }
+        for (key, ceiling) in [
+            ("max_ddm_object_size", 1024 * 1024 * 1024u64),
+            ("max_reply_chain_bytes", 4 * 1024 * 1024 * 1024),
+            ("max_reply_chain_packets", 65_535),
+            ("max_materialized_lob_size", 1024 * 1024 * 1024),
+        ] {
+            assert!(parse_dsn(&format!("database=TESTDB;{key}={ceiling}")).is_ok());
+            assert!(parse_dsn(&format!("database=TESTDB;{key}={}", ceiling + 1)).is_err());
+        }
+    }
+
+    #[test]
+    fn accepts_jdc_kerberos_aliases_and_fails_closed_on_unknown_keys() {
+        let config = parse_dsn(
+            "Database=TESTDB;kerberos_spn=db2/server@REALM;kerberos_realm=REALM;\
+             krb5principal=user@REALM;client_principal=other@REALM;\
+             krb5_config=/etc/krb5.conf;keytab=/tmp/db2.keytab;ccache=/tmp/cc;\
+             gssapi_token=/tmp/token.bin;CurrentSchema=APP",
+        )
+        .unwrap();
+        assert_eq!(config.kerberos_spn, "db2/server@REALM");
+        assert_eq!(config.kerberos_realm, "REALM");
+        assert_eq!(config.krb5_principal, "other@REALM");
+        assert_eq!(config.krb5_config_file, "/etc/krb5.conf");
+        assert_eq!(config.krb5_keytab_file, "/tmp/db2.keytab");
+        assert_eq!(config.krb5_ccache_file, "/tmp/cc");
+        assert_eq!(config.gssapi_token_file, "/tmp/token.bin");
+        assert_eq!(config.current_schema, "APP");
+        assert!(parse_dsn("Database=TESTDB;CurrentSchema=   ").is_err());
         assert_eq!(
-            ignored.protocol_limits.max_dss_size,
-            ProtocolLimits::default().max_dss_size
+            parse_dsn("Database=TESTDB;kerberos_principal=client@REALM")
+                .unwrap()
+                .krb5_principal,
+            "client@REALM"
+        );
+        for key in [
+            "krb5_ticket_lifetime",
+            "kerberos_misspelled",
+            "gssapi_unknown",
+        ] {
+            let error = parse_dsn(&format!("Database=TESTDB;{key}=x")).unwrap_err();
+            assert!(
+                error.to_string().contains("unknown Kerberos option"),
+                "{error}"
+            );
+            let error = parse_dsn(&format!("db2://localhost/TESTDB?{key}=x")).unwrap_err();
+            assert!(
+                error.to_string().contains("unknown Kerberos option"),
+                "{error}"
+            );
+        }
+        assert_eq!(
+            parse_dsn("Database=TESTDB;custom_option=x").unwrap().params["custom_option"],
+            "x"
         );
     }
 

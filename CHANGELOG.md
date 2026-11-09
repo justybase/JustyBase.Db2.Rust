@@ -26,6 +26,13 @@ The project follows Semantic Versioning.
   refuses a transaction or pooled lease before I/O, and leaves the session
   closed on failure. `set_current_schema` now trims and validates its input.
   API snapshot regenerated for the additive members.
+- Aligned resource limits with JDC: limit DSN values now reject zero, negative,
+  non-numeric and above-ceiling values with a configuration error; invalid
+  `block_size` fails too. `Db2BatchOptions` defaults to 256 rows / 8 MiB, the
+  import default reports progress every 10,000 rows, and `Db2PoolStats`/`stats()`
+  expose total/idle/active/waiters/discarded/acquire-timeout counters. API
+  snapshot regenerated for the additive members.
+
 ## 0.1.0-alpha.3 - 2026-10-21
 
 ### Added

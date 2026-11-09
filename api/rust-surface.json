@@ -2,7 +2,7 @@
   "generator": "tools/api/generate-rust-surface.cjs",
   "crate": "justybase-db2",
   "counts": {
-    "struct": 49,
+    "struct": 50,
     "enum": 16,
     "trait": 0,
     "fn": 15,
@@ -285,13 +285,17 @@
         "pub async fn query_with_blob_streams( &self, sql: &str, parameters: &mut [Db2InputParameter<'_>], ) -> Result<Db2QueryResult, Db2Error>",
         "pub async fn query_with_params( &self, sql: &str, parameters: &[Db2Value], ) -> Result<Db2QueryResult, Db2Error>",
         "pub async fn shutdown(&self, budget: Duration) -> Result<(), Db2Error>",
+        "pub fn acquire_timeout_count(&self) -> usize",
+        "pub fn active_session_count(&self) -> usize",
         "pub fn connect_dsn(dsn: &str, max_connections: usize) -> Result<Self, Db2Error>",
+        "pub fn discarded_session_count(&self) -> usize",
         "pub fn idle_session_count(&self) -> usize",
         "pub fn is_closed(&self) -> bool",
         "pub fn new(config: Config, max_connections: usize) -> Result<Self, Db2Error>",
         "pub fn new_with_options( config: Config, options: Db2PoolOptions, reset_policy: PoolResetPolicy, ) -> Result<Self, Db2Error>",
         "pub fn new_with_reset_policy( config: Config, max_connections: usize, reset_policy: PoolResetPolicy, ) -> Result<Self, Db2Error>",
         "pub fn session_count(&self) -> usize",
+        "pub fn stats(&self) -> Db2PoolStats",
         "pub fn waiting_count(&self) -> usize"
       ]
     },
@@ -307,6 +311,12 @@
       "path": "network::pool::Db2PoolOptions",
       "kind": "struct",
       "declaration": "pub struct Db2PoolOptions { pub max_connections: usize, pub max_waiters: usize, pub acquire_timeout: Duration, pub connect_timeout: Duration, pub idle_timeout: Duration, pub max_lifetime: Duration, pub reap_interval: Duration, }",
+      "methods": []
+    },
+    {
+      "path": "network::pool::Db2PoolStats",
+      "kind": "struct",
+      "declaration": "pub struct Db2PoolStats { pub total_connections: usize, pub idle_connections: usize, pub active_connections: usize, pub waiters: usize, pub discarded_sessions: usize, pub acquire_timeouts: usize, }",
       "methods": []
     },
     {
@@ -1072,5 +1082,5 @@
       "methods": []
     }
   ],
-  "digest": "ea4f3a49b8f4f3470374ecfa271e7a7bad3843a2a6e4ca6ff84435d2ca6d5ec3"
+  "digest": "24f1a8de6007f705e71fd95a378e78e99a949a14a3a4ac91e9b665d4582c5c38"
 }

@@ -19,7 +19,7 @@ pub use import::{
     Db2ImportColumn, Db2ImportError, Db2ImportOptions, Db2ImportPolicy, Db2ImportProgress,
     Db2ImportTarget,
 };
-pub use network::pool::{Db2Pool, Db2PoolOptions, Db2PooledSession, PoolResetPolicy};
+pub use network::pool::{Db2Pool, Db2PoolOptions, Db2PoolStats, Db2PooledSession, PoolResetPolicy};
 pub use network::session::{
     Db2BatchOptions, Db2ClientInfo, Db2CommandContext, Db2CommandOptions, Db2ExecutionResult,
     Db2InputParameter, Db2InsertResult, Db2InterruptHandle, Db2IsolationLevel, Db2LobEncoding,
