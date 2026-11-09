@@ -17,7 +17,7 @@
     {
       "path": "config::Config",
       "kind": "struct",
-      "declaration": "pub struct Config { pub host: String, pub port: u16, pub database: String, pub user: String, pub password: String, pub use_ssl: bool, pub ssl_root_ca_path: String, pub ssl_client_cert_path: String, pub ssl_client_key_path: String, pub timeout_ms: i64, pub block_size: usize, pub protocol_limits: ProtocolLimits, pub security_mechanism: u16, pub kerberos_spn: String, pub kerberos_realm: String, pub krb5_config_file: String, pub krb5_keytab_file: String, pub krb5_ccache_file: String, pub gssapi_token_file: String, pub client_appl_name: String, pub client_wrkstn_name: String, pub client_userid: String, pub client_acctng: String, pub client_corr_token: String, pub params: HashMap<String, String>, }",
+      "declaration": "pub struct Config { pub host: String, pub port: u16, pub database: String, pub user: String, pub password: String, pub use_ssl: bool, pub ssl_root_ca_path: String, pub ssl_client_cert_path: String, pub ssl_client_key_path: String, pub timeout_ms: i64, pub block_size: usize, pub protocol_limits: ProtocolLimits, pub security_mechanism: u16, pub kerberos_spn: String, pub kerberos_realm: String, pub krb5_principal: String, pub krb5_config_file: String, pub krb5_keytab_file: String, pub krb5_ccache_file: String, pub gssapi_token_file: String, pub client_appl_name: String, pub client_wrkstn_name: String, pub client_userid: String, pub client_acctng: String, pub client_corr_token: String, pub current_schema: String, pub params: HashMap<String, String>, }",
       "methods": []
     },
     {
@@ -489,6 +489,7 @@
         "pub async fn begin_transaction_with_isolation( &mut self, isolation: Db2IsolationLevel, ) -> Result<Db2Transaction<'_>, Db2Error>",
         "pub async fn call_procedure_stream<'session>( &'session mut self, statement: &Db2Statement, parameters: &[Db2Parameter], ) -> Result<Db2ProcedureReader<'session>, Db2Error>",
         "pub async fn call_procedure_stream_with_options<'session>( &'session mut self, statement: &Db2Statement, parameters: &[Db2Parameter], options: Db2CommandOptions, ) -> Result<Db2ProcedureReader<'session>, Db2Error>",
+        "pub async fn change_database(&mut self, database: &str) -> Result<(), Db2Error>",
         "pub async fn close(&mut self) -> Result<(), Db2Error>",
         "pub async fn commit(&mut self) -> Result<(), Db2Error>",
         "pub async fn connect(config: Config) -> Result<Self, Db2Error>",
@@ -1071,5 +1072,5 @@
       "methods": []
     }
   ],
-  "digest": "f7eab3e6a544d05cb09a9c0b18bcc390dc9183cda372e907f1cadae4589676d2"
+  "digest": "ea4f3a49b8f4f3470374ecfa271e7a7bad3843a2a6e4ca6ff84435d2ca6d5ec3"
 }

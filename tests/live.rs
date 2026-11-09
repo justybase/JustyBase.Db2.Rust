@@ -6301,3 +6301,54 @@ async fn live_dropped_pool_wait_future_preserves_active_lease() {
     pool.close().await.unwrap();
     assert_eq!(pool.session_count(), 0);
 }
+
+#[tokio::test]
+#[ignore = "requires DB2_TEST_DSN and a live Db2 database"]
+async fn live_current_schema_dsn_setter_and_failed_change_database() {
+    let dsn = std::env::var("DB2_TEST_DSN").unwrap();
+    let schema = format!(
+        "RS_SESSION_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let separator = if dsn.contains('?') { '&' } else { '?' };
+    let mut db = Db2Session::connect_dsn(&format!("{dsn}{separator}current_schema={schema}"))
+        .await
+        .unwrap();
+    assert_eq!(db.current_schema(), Some(schema.as_str()));
+    let rows = db.query("VALUES CURRENT SCHEMA").await.unwrap().rows;
+    let Db2Value::Text(actual) = &rows[0][0] else {
+        panic!("unexpected CURRENT SCHEMA type: {:?}", rows[0][0]);
+    };
+    assert_eq!(actual.trim(), schema);
+
+    let replacement = format!("{schema}_2");
+    db.set_current_schema(&format!("  {replacement}  "))
+        .await
+        .unwrap();
+    assert_eq!(db.current_schema(), Some(replacement.as_str()));
+    let rows = db.query("VALUES CURRENT SCHEMA").await.unwrap().rows;
+    let Db2Value::Text(actual) = &rows[0][0] else {
+        panic!("unexpected CURRENT SCHEMA type: {:?}", rows[0][0]);
+    };
+    assert_eq!(actual.trim(), replacement);
+
+    let missing = format!(
+        "X{}{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let missing = missing.chars().take(18).collect::<String>().to_uppercase();
+    let error = db.change_database(&missing).await.unwrap_err();
+    assert!(!error.to_string().is_empty());
+    assert!(
+        db.is_closed(),
+        "a failed reconnect must leave the session closed"
+    );
+}

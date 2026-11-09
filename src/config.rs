@@ -41,6 +41,7 @@ pub struct Config {
     pub security_mechanism: u16,
     pub kerberos_spn: String,
     pub kerberos_realm: String,
+    pub krb5_principal: String,
     pub krb5_config_file: String,
     pub krb5_keytab_file: String,
     pub krb5_ccache_file: String,
@@ -50,6 +51,7 @@ pub struct Config {
     pub client_userid: String,
     pub client_acctng: String,
     pub client_corr_token: String,
+    pub current_schema: String,
     pub params: HashMap<String, String>,
 }
 
@@ -71,6 +73,7 @@ impl Default for Config {
             security_mechanism: 0,
             kerberos_spn: String::new(),
             kerberos_realm: String::new(),
+            krb5_principal: String::new(),
             krb5_config_file: String::new(),
             krb5_keytab_file: String::new(),
             krb5_ccache_file: String::new(),
@@ -80,6 +83,7 @@ impl Default for Config {
             client_userid: String::new(),
             client_acctng: String::new(),
             client_corr_token: String::new(),
+            current_schema: String::new(),
             params: HashMap::new(),
         }
     }
@@ -352,8 +356,18 @@ fn apply_param(config: &mut Config, key: &str, value: &str) -> Result<(), Config
         "security_mechanism" | "secmec" | "auth_mechanism" | "auth" => {
             config.security_mechanism = parse_security_mechanism(value)?;
         }
-        "spn" | "service_principal" | "server_principal" => config.kerberos_spn = value.into(),
-        "realm" | "krb5_realm" => config.kerberos_realm = value.into(),
+        "spn" | "service_principal" | "server_principal" | "kerberos_spn" => {
+            config.kerberos_spn = value.into()
+        }
+        "realm" | "krb5_realm" | "kerberos_realm" => config.kerberos_realm = value.into(),
+        "krb5_principal" | "krb5principal" | "kerberos_principal" | "kerberosprincipal"
+        | "client_principal" => config.krb5_principal = value.into(),
+        "currentschema" | "current_schema" => {
+            if value.trim().is_empty() {
+                return Err(ConfigError("DB2 current schema must not be empty".into()));
+            }
+            config.current_schema = value.into();
+        }
         "krb5_config" | "krb5_conf" => config.krb5_config_file = value.into(),
         "krb5_keytab" | "keytab" => config.krb5_keytab_file = value.into(),
         "krb5_ccache" | "ccache" => config.krb5_ccache_file = value.into(),
@@ -370,6 +384,14 @@ fn apply_param(config: &mut Config, key: &str, value: &str) -> Result<(), Config
             config.client_corr_token = value.into()
         }
         _ => {
+            if key_lower.starts_with("krb5")
+                || key_lower.starts_with("kerberos")
+                || key_lower.starts_with("gssapi")
+            {
+                return Err(ConfigError(format!(
+                    "unknown Kerberos option '{key}'; supported: spn, realm, krb5_principal, krb5_keytab, krb5_ccache, krb5_config, gssapi_token_file"
+                )));
+            }
             config.params.insert(key.into(), value.into());
         }
     }

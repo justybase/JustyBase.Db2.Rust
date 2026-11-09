@@ -18,7 +18,14 @@ The project follows Semantic Versioning.
   `Db2BatchError::kind`/`outcome` expose the wrapper classification. Connect,
   handshake and TLS deadline failures are now `Timeout`/`Transport`. API snapshot
   regenerated for the additive enum methods.
-
+- Added `currentschema`/`current_schema` DSN support and `Config::current_schema`/
+  `krb5_principal`, plus all JDC Kerberos aliases (`kerberos_spn`,
+  `kerberos_realm`, the principal spellings and the file keys). Unknown
+  `krb5`/`kerberos`/`gssapi` keys fail closed, and an explicit empty schema is
+  rejected. `Db2Session::change_database` reconnects with a fresh handshake,
+  refuses a transaction or pooled lease before I/O, and leaves the session
+  closed on failure. `set_current_schema` now trims and validates its input.
+  API snapshot regenerated for the additive members.
 ## 0.1.0-alpha.3 - 2026-10-21
 
 ### Added

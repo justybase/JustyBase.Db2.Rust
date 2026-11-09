@@ -1683,6 +1683,8 @@ pub struct Db2Session {
     base_schema: Option<String>,
     base_isolation: Option<String>,
     current_schema: Option<String>,
+    /// Schema the driver itself applied; the public getter never claims a server default.
+    reported_schema: Option<String>,
     current_isolation: Option<String>,
     pool_baseline_captured: bool,
     pool_dirty: SessionDirtyState,
@@ -1957,6 +1959,13 @@ impl Db2Session {
                 "security mechanism 11 (Kerberos/GSSAPI) requires gssapi_token_file with a caller-supplied GSSAPI token; krb5_keytab/krb5_ccache ticket synthesis is not supported",
             ));
         }
+        let current_schema = config.current_schema.trim().to_owned();
+        if current_schema.len() > 128 || current_schema.contains('\0') {
+            return Err(Db2Error::new(
+                Db2ErrorKind::InvalidConfiguration,
+                format!("invalid DB2 current schema {:?}", config.current_schema),
+            ));
+        }
         if config.use_ssl && config.port == 50_000 {
             config.port = 50_001;
         }
@@ -2020,6 +2029,7 @@ impl Db2Session {
             base_schema: None,
             base_isolation: None,
             current_schema: None,
+            reported_schema: None,
             current_isolation: None,
             pool_baseline_captured: false,
             pool_dirty: SessionDirtyState::default(),
@@ -2034,6 +2044,12 @@ impl Db2Session {
             )
         })?;
         if let Err(error) = result {
+            session.closed = true;
+            return Err(error);
+        }
+        if !current_schema.is_empty()
+            && let Err(error) = session.set_current_schema(&current_schema).await
+        {
             session.closed = true;
             return Err(error);
         }
@@ -2077,7 +2093,12 @@ impl Db2Session {
     }
 
     pub fn current_schema(&self) -> Option<&str> {
-        self.current_schema.as_deref()
+        self.reported_schema.as_deref()
+    }
+
+    fn configured_schema(&self) -> Option<String> {
+        let schema = self.config.current_schema.trim();
+        (!schema.is_empty()).then(|| schema.to_owned())
     }
 
     /// Installs a callback for successful SQLCARD and row-level SQLCA warnings.
@@ -2192,9 +2213,63 @@ impl Db2Session {
         result
     }
 
+    /// Reconnects this session to another database on the same server.
+    ///
+    /// Fails before any I/O for an empty/invalid name, refuses while a
+    /// transaction is active or on a pooled session, and leaves the session
+    /// closed if the reconnect fails. A successful switch performs a fresh
+    /// DRDA handshake and keeps only the caller's warning handler.
+    pub async fn change_database(&mut self, database: &str) -> Result<(), Db2Error> {
+        let target = database.trim();
+        if target.is_empty() {
+            return Err(Db2Error::new(
+                Db2ErrorKind::InvalidConfiguration,
+                "DB2 database name must not be empty",
+            ));
+        }
+        if target.len() > 128 || target.contains('\0') {
+            return Err(Db2Error::new(
+                Db2ErrorKind::InvalidConfiguration,
+                format!("invalid DB2 database name {database:?}"),
+            ));
+        }
+        if target == self.config.database {
+            return Ok(());
+        }
+        if !self.auto_commit {
+            return Err(Db2Error::other(
+                "cannot change database while a transaction is active".to_string(),
+            ));
+        }
+        if self.pool_baseline_captured {
+            return Err(Db2Error::other(
+                "cannot change database on a pooled session; acquire with the target DSN instead"
+                    .to_string(),
+            ));
+        }
+        let mut config = self.config.clone();
+        config.database = target.to_owned();
+        let warning_handler = self.warning_handler.take();
+        // The old transport must not survive a failed reconnect: the session is
+        // closed first, so there is never a half-connected or wrong-database state.
+        self.closed = true;
+        let _ = self.stream.shutdown().await;
+        let mut replacement = Self::connect(config).await?;
+        replacement.warning_handler = warning_handler;
+        *self = replacement;
+        Ok(())
+    }
+
     /// Sets CURRENT SCHEMA while recording the change for safe, targeted pool reset.
     pub async fn set_current_schema(&mut self, schema: &str) -> Result<(), Db2Error> {
-        let quoted = quote_identifier(schema)?;
+        let target = schema.trim();
+        if target.is_empty() || target.len() > 128 || target.contains('\0') {
+            return Err(Db2Error::new(
+                Db2ErrorKind::InvalidConfiguration,
+                format!("invalid DB2 current schema {schema:?}"),
+            ));
+        }
+        let quoted = quote_identifier(target)?;
         let _operation = self.interrupt_coordinator.begin_operation().await;
         let result = run_with_command_deadline(
             self.default_command_options(),
@@ -2206,7 +2281,8 @@ impl Db2Session {
             self.closed = true;
         }
         if result.is_ok() {
-            self.current_schema = Some(schema.to_owned());
+            self.current_schema = Some(target.to_owned());
+            self.reported_schema = Some(target.to_owned());
             self.prepared_sql = None;
             self.pool_dirty.schema = true;
         }
@@ -2336,6 +2412,7 @@ impl Db2Session {
                     ))
                     .await?;
                     self.current_schema = Some(schema);
+                    self.reported_schema = self.configured_schema();
                     self.prepared_sql = None;
                 }
                 if self.pool_dirty.isolation
@@ -2528,6 +2605,7 @@ impl Db2Session {
         self.client_info.user_id = target_client_info.user_id;
         self.client_info.accounting = target_client_info.accounting;
         self.current_schema = Some(base_schema);
+        self.reported_schema = self.configured_schema();
         self.current_isolation = Some(base_isolation);
         self.current_user = self.base_user.clone();
         if !self.auto_commit {
@@ -8276,6 +8354,7 @@ mod tests {
             base_schema: None,
             base_isolation: None,
             current_schema: None,
+            reported_schema: None,
             current_isolation: None,
             pool_baseline_captured: false,
             pool_dirty: SessionDirtyState::default(),
@@ -10447,6 +10526,7 @@ mod tests {
             base_schema: None,
             base_isolation: None,
             current_schema: None,
+            reported_schema: None,
             current_isolation: None,
             pool_baseline_captured: false,
             pool_dirty: SessionDirtyState::default(),
@@ -10482,6 +10562,7 @@ mod tests {
             base_schema: None,
             base_isolation: None,
             current_schema: None,
+            reported_schema: None,
             current_isolation: None,
             pool_baseline_captured: false,
             pool_dirty: SessionDirtyState::default(),
@@ -10529,6 +10610,7 @@ mod tests {
             base_schema: None,
             base_isolation: None,
             current_schema: None,
+            reported_schema: None,
             current_isolation: None,
             pool_baseline_captured: false,
             pool_dirty: SessionDirtyState::default(),
@@ -10579,6 +10661,7 @@ mod tests {
             base_schema: None,
             base_isolation: None,
             current_schema: None,
+            reported_schema: None,
             current_isolation: None,
             pool_baseline_captured: false,
             pool_dirty: SessionDirtyState::default(),
@@ -11431,6 +11514,126 @@ mod tests {
             .unwrap_err();
         assert_eq!(error.kind, Db2ErrorKind::Unsupported);
         assert!(error.to_string().contains("mid-session re-authentication"));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn connect_applies_and_reports_dsn_current_schema() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            serve_basic_handshake(&mut socket).await;
+            serve_execute_statement(&mut socket, "SET CURRENT SCHEMA \"APP\"", cp::EXCSQLSET).await;
+            let mut buffer = [0u8; 1];
+            let _ = socket.read(&mut buffer).await;
+        });
+
+        let mut config = Config::default();
+        config.host = "127.0.0.1".into();
+        config.port = port;
+        config.database = "TESTDB".into();
+        config.user = "db2inst1".into();
+        config.password = "secret".into();
+        config.security_mechanism = 3;
+        config.current_schema = "  APP  ".into();
+        let mut session = Db2Session::connect(config).await.unwrap();
+        assert_eq!(session.current_schema(), Some("APP"));
+        session.close().await.unwrap();
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn change_database_reconnects_and_reports_the_new_database() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            serve_basic_handshake(&mut first).await;
+            let mut buffer = [0u8; 1];
+            let _ = first.read(&mut buffer).await;
+            let (mut second, _) = listener.accept().await.unwrap();
+            serve_basic_handshake(&mut second).await;
+            let _ = second.read(&mut buffer).await;
+        });
+
+        let mut config = Config::default();
+        config.host = "127.0.0.1".into();
+        config.port = port;
+        config.database = "TESTDB".into();
+        config.user = "db2inst1".into();
+        config.password = "secret".into();
+        config.security_mechanism = 3;
+        let mut session = Db2Session::connect(config).await.unwrap();
+        session.change_database("  NEWDB  ").await.unwrap();
+        assert_eq!(session.config.database, "NEWDB");
+        assert!(!session.is_closed());
+        session.close().await.unwrap();
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn change_database_validates_and_refuses_before_any_io() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            serve_basic_handshake(&mut socket).await;
+            let mut buffer = [0u8; 1];
+            let _ = socket.read(&mut buffer).await;
+        });
+
+        let mut config = Config::default();
+        config.host = "127.0.0.1".into();
+        config.port = port;
+        config.database = "TESTDB".into();
+        config.user = "db2inst1".into();
+        config.password = "secret".into();
+        config.security_mechanism = 3;
+        let mut session = Db2Session::connect(config).await.unwrap();
+
+        let long = "D".repeat(129);
+        for invalid in ["   ", "A\0B", long.as_str()] {
+            let error = session.change_database(invalid).await.unwrap_err();
+            assert_eq!(error.kind, Db2ErrorKind::InvalidConfiguration);
+            assert!(!session.is_closed());
+        }
+        session.set_auto_commit(false);
+        let error = session.change_database("NEWDB").await.unwrap_err();
+        assert!(error.to_string().contains("transaction"), "{error}");
+        assert!(!session.is_closed());
+        session.set_auto_commit(true);
+        session.pool_baseline_captured = true;
+        let error = session.change_database("NEWDB").await.unwrap_err();
+        assert!(error.to_string().contains("pooled"), "{error}");
+        assert!(!session.is_closed());
+        session.pool_baseline_captured = false;
+
+        session.close().await.unwrap();
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn change_database_failure_leaves_the_session_closed() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            drop(listener);
+            serve_basic_handshake(&mut socket).await;
+            drop(socket);
+        });
+
+        let mut config = Config::default();
+        config.host = "127.0.0.1".into();
+        config.port = port;
+        config.database = "TESTDB".into();
+        config.user = "db2inst1".into();
+        config.password = "secret".into();
+        config.security_mechanism = 3;
+        let mut session = Db2Session::connect(config).await.unwrap();
+        assert!(session.change_database("NEWDB").await.is_err());
+        assert!(session.is_closed());
         server.await.unwrap();
     }
 
@@ -13967,6 +14170,7 @@ mod tests {
             base_schema: None,
             base_isolation: None,
             current_schema: None,
+            reported_schema: None,
             current_isolation: None,
             pool_baseline_captured: false,
             pool_dirty: SessionDirtyState::default(),
