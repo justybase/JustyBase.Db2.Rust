@@ -62,6 +62,25 @@ impl Default for Db2PoolOptions {
         }
     }
 }
+
+impl Db2PoolOptions {
+    pub(crate) fn validate(&self) -> Result<(), Db2Error> {
+        if self.max_connections == 0
+            || self.max_connections > Semaphore::MAX_PERMITS
+            || self.acquire_timeout.is_zero()
+            || self.connect_timeout.is_zero()
+            || self.idle_timeout.is_zero()
+            || self.max_lifetime.is_zero()
+            || self.reap_interval.is_zero()
+        {
+            return Err(Db2Error::new(
+                crate::Db2ErrorKind::InvalidConfiguration,
+                "Db2 pool max_connections must be positive, max_waiters non-negative, and intervals must be positive and supported by the runtime",
+            ));
+        }
+        Ok(())
+    }
+}
 struct IdleSession {
     session: Db2Session,
     born: Instant,
@@ -150,19 +169,7 @@ impl Db2Pool {
         options: Db2PoolOptions,
         reset_policy: PoolResetPolicy,
     ) -> Result<Self, Db2Error> {
-        if options.max_connections == 0
-            || options.max_connections > Semaphore::MAX_PERMITS
-            || options.acquire_timeout.is_zero()
-            || options.connect_timeout.is_zero()
-            || options.idle_timeout.is_zero()
-            || options.max_lifetime.is_zero()
-            || options.reap_interval.is_zero()
-        {
-            return Err(Db2Error::new(
-                crate::Db2ErrorKind::InvalidConfiguration,
-                "Db2 pool max_connections must be positive, max_waiters non-negative, and intervals must be positive and supported by the runtime",
-            ));
-        }
+        options.validate()?;
         Ok(Self {
             inner: Arc::new(PoolInner {
                 config,

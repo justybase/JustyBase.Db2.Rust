@@ -273,6 +273,16 @@ impl Db2BatchOptions {
             max_encoded_bytes,
         }
     }
+
+    pub(crate) fn validate(self) -> Result<(), Db2Error> {
+        if self.max_rows == 0 || self.max_rows > i16::MAX as usize || self.max_encoded_bytes == 0 {
+            return Err(Db2Error::new(
+                Db2ErrorKind::InvalidConfiguration,
+                "DB2 batch row limit must be in 1..=32767 and encoded-byte limit must be positive",
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl Default for Db2BatchOptions {
@@ -3736,19 +3746,8 @@ impl Db2Session {
             return Ok(0);
         }
         self.pool_dirty.unknown = true;
-        if batch_options.max_rows == 0
-            || batch_options.max_rows > i16::MAX as usize
-            || batch_options.max_encoded_bytes == 0
-        {
-            return Err(Db2BatchError::new(
-                Db2Error::new(
-                    Db2ErrorKind::InvalidConfiguration,
-                    "DB2 batch row limit must be in 1..=32767 and encoded-byte limit must be positive",
-                ),
-                None,
-                0,
-                0,
-            ));
+        if let Err(error) = batch_options.validate() {
+            return Err(Db2BatchError::new(error, None, 0, 0));
         }
         let _operation = self.interrupt_coordinator.begin_operation().await;
         let interrupt = self.deadline_interrupt_handle();

@@ -1,0 +1,2 @@
+# JDC vectors are published byte-for-byte; keep LF on every platform.
+tests/fixtures/jdc/** text eol=lf

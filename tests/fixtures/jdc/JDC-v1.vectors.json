@@ -1,0 +1,730 @@
+{
+  "schema": "jdc-vectors/v1",
+  "contract": {
+    "version": "v1",
+    "sha256": "ea7fb4d717734680bee20bbfa598241cfdde809309ab756374f9505f70badb7f"
+  },
+  "dsn": {
+    "accept": [
+      {
+        "id": "dsn-url-basic",
+        "requirements": ["DSN-01", "DSN-02"],
+        "input": "db2://db2inst1:password@localhost:50000/SAMPLE",
+        "expect": {
+          "host": "localhost",
+          "port": 50000,
+          "database": "SAMPLE",
+          "user": "db2inst1",
+          "password": "password",
+          "use_ssl": false,
+          "timeout_ms": 30000,
+          "block_size": 65535,
+          "security_mechanism": 0,
+          "current_schema": ""
+        }
+      },
+      {
+        "id": "dsn-url-tls",
+        "requirements": ["DSN-01", "DSN-02", "DSN-06"],
+        "input": "db2s://myuser:sec%40ret@db2server:50001/PRODDB?timeout=15s&block_size=131072",
+        "expect": {
+          "host": "db2server",
+          "port": 50001,
+          "database": "PRODDB",
+          "user": "myuser",
+          "password": "sec@ret",
+          "use_ssl": true,
+          "timeout_ms": 15000,
+          "block_size": 131072
+        }
+      },
+      {
+        "id": "dsn-url-scheme-case",
+        "requirements": ["DSN-01"],
+        "input": "DB2://user:pass@host:50000/TESTDB",
+        "expect": {
+          "host": "host",
+          "port": 50000,
+          "database": "TESTDB",
+          "user": "user",
+          "password": "pass",
+          "use_ssl": false
+        }
+      },
+      {
+        "id": "dsn-url-escaped-credentials",
+        "requirements": ["DSN-01"],
+        "input": "db2://us%40er:pa%40ss@host/TESTDB",
+        "expect": {
+          "user": "us@er",
+          "password": "pa@ss"
+        }
+      },
+      {
+        "id": "dsn-url-ipv6",
+        "requirements": ["DSN-01", "DSN-02"],
+        "input": "db2://user:pass@[::1]:50000/TESTDB",
+        "expect": {
+          "host": "::1",
+          "port": 50000
+        }
+      },
+      {
+        "id": "dsn-url-user-only",
+        "requirements": ["DSN-01"],
+        "input": "db2://user@host/TESTDB",
+        "expect": {
+          "user": "user",
+          "password": ""
+        }
+      },
+      {
+        "id": "dsn-url-no-user",
+        "requirements": ["DSN-01"],
+        "input": "db2://host/TESTDB",
+        "expect": {
+          "user": "",
+          "password": ""
+        }
+      },
+      {
+        "id": "dsn-url-timeout-unit",
+        "requirements": ["DSN-01", "DSN-02"],
+        "input": "db2://user:pass@host/TESTDB?timeout=5s",
+        "expect": {
+          "timeout_ms": 5000
+        }
+      },
+      {
+        "id": "dsn-url-timeout-seconds",
+        "requirements": ["DSN-01", "DSN-02"],
+        "input": "db2://user:pass@host/TESTDB?timeout=7",
+        "expect": {
+          "timeout_ms": 7000
+        }
+      },
+      {
+        "id": "dsn-url-timeout-compound",
+        "requirements": ["DSN-01", "DSN-02"],
+        "input": "db2://host/TESTDB?timeout=2m30s",
+        "expect": {
+          "timeout_ms": 150000
+        }
+      },
+      {
+        "id": "dsn-url-security-mechanism",
+        "requirements": ["DSN-02", "DSN-04"],
+        "input": "db2://user:pass@host/TESTDB?security_mechanism=9",
+        "expect": {
+          "security_mechanism": 9
+        }
+      },
+      {
+        "id": "dsn-url-block-size",
+        "requirements": ["DSN-02"],
+        "input": "db2://user:pass@host/TESTDB?block_size=131072",
+        "expect": {
+          "block_size": 131072
+        }
+      },
+      {
+        "id": "dsn-url-invalid-timeout-keeps-default",
+        "requirements": ["DSN-01"],
+        "input": "db2://u:p@host/TESTDB?timeout=abc",
+        "expect": {
+          "timeout_ms": 30000
+        }
+      },
+      {
+        "id": "dsn-url-invalid-port-key-keeps-default",
+        "requirements": ["DSN-01", "DSN-02"],
+        "input": "db2://u:p@host/TESTDB?port=70000",
+        "expect": {
+          "port": 50000
+        }
+      },
+      {
+        "id": "dsn-kv-aliases",
+        "requirements": ["DSN-01", "DSN-02"],
+        "input": "Database=TESTDB;Host=h;Port=50001;UID=u;PWD=p",
+        "expect": {
+          "host": "h",
+          "port": 50001,
+          "database": "TESTDB",
+          "user": "u",
+          "password": "p"
+        }
+      },
+      {
+        "id": "dsn-kv-case-insensitive",
+        "requirements": ["DSN-01", "DSN-02"],
+        "input": "DATABASE=TESTDB;HOST=h",
+        "expect": {
+          "host": "h",
+          "database": "TESTDB"
+        }
+      },
+      {
+        "id": "dsn-kv-last-wins",
+        "requirements": ["DSN-01"],
+        "input": "Database=TESTDB;UID=a;UID=b",
+        "expect": {
+          "user": "b"
+        }
+      },
+      {
+        "id": "dsn-kv-password-contains-equals",
+        "requirements": ["DSN-01"],
+        "input": "Database=TESTDB;PWD=a=b",
+        "expect": {
+          "password": "a=b"
+        }
+      },
+      {
+        "id": "dsn-kv-server-endpoint",
+        "requirements": ["DSN-02"],
+        "input": "Server=host:50001;Database=TESTDB",
+        "expect": {
+          "host": "host",
+          "port": 50001
+        }
+      },
+      {
+        "id": "dsn-kv-server-ipv6-endpoint",
+        "requirements": ["DSN-02"],
+        "input": "Server=[::1]:50001;Database=TESTDB",
+        "expect": {
+          "host": "::1",
+          "port": 50001
+        }
+      },
+      {
+        "id": "dsn-kv-authentication-server-encrypt",
+        "requirements": ["DSN-02", "DSN-05"],
+        "input": "Database=TESTDB;Authentication=SERVER_ENCRYPT",
+        "expect": {
+          "security_mechanism": 9
+        }
+      },
+      {
+        "id": "dsn-kv-authentication-gssplugin",
+        "requirements": ["DSN-02", "DSN-05"],
+        "input": "Database=TESTDB;Authentication=GSSPLUGIN",
+        "expect": {
+          "security_mechanism": 11
+        }
+      },
+      {
+        "id": "dsn-kv-defaults",
+        "requirements": ["DSN-01", "DSN-02"],
+        "input": "Database=TESTDB",
+        "expect": {
+          "host": "localhost",
+          "port": 50000,
+          "database": "TESTDB",
+          "user": "",
+          "password": "",
+          "use_ssl": false,
+          "timeout_ms": 30000,
+          "block_size": 65535,
+          "security_mechanism": 0,
+          "current_schema": ""
+        }
+      },
+      {
+        "id": "dsn-kv-current-schema",
+        "requirements": ["DSN-02", "DSN-03"],
+        "input": "Database=TESTDB;CurrentSchema=Sales",
+        "expect": {
+          "current_schema": "Sales"
+        }
+      },
+      {
+        "id": "dsn-kv-current-schema-trimmed",
+        "requirements": ["DSN-03"],
+        "input": "Database=TESTDB;CurrentSchema= Sales ",
+        "expect": {
+          "current_schema": "Sales"
+        }
+      },
+      {
+        "id": "dsn-kv-kerberos-aliases",
+        "requirements": ["DSN-02"],
+        "input": "Database=TESTDB;kerberos_spn=db2/server@REALM;kerberos_realm=REALM;krb5principal=user@REALM;krb5_config=/etc/krb5.conf;keytab=/tmp/db2.keytab;ccache=/tmp/cc;gssapi_token=/tmp/token.bin",
+        "expect": {
+          "kerberos_spn": "db2/server@REALM",
+          "kerberos_realm": "REALM",
+          "krb5_principal": "user@REALM",
+          "krb5_config_file": "/etc/krb5.conf",
+          "krb5_keytab_file": "/tmp/db2.keytab",
+          "krb5_ccache_file": "/tmp/cc",
+          "gssapi_token_file": "/tmp/token.bin"
+        }
+      },
+      {
+        "id": "dsn-url-kerberos-escaped",
+        "requirements": ["DSN-01", "DSN-02"],
+        "input": "db2://localhost/TESTDB?spn=db2%2Fserver@CORP.LOCAL&krb5_config=%2Fetc%2Fkrb5.conf&krb5_keytab=%2Fetc%2Fdb2.keytab&krb5_ccache=%2Ftmp%2Fkrb5cc_1000&client_applname=orders&client_corr_token=trace",
+        "expect": {
+          "kerberos_spn": "db2/server@CORP.LOCAL",
+          "krb5_config_file": "/etc/krb5.conf",
+          "krb5_keytab_file": "/etc/db2.keytab",
+          "krb5_ccache_file": "/tmp/krb5cc_1000",
+          "client_appl_name": "orders",
+          "client_corr_token": "trace"
+        }
+      },
+      {
+        "id": "dsn-kv-unknown-option",
+        "requirements": ["DSN-08"],
+        "input": "Database=TESTDB;Unknown=1",
+        "expect": {
+          "params": {
+            "Unknown": "1"
+          }
+        }
+      },
+      {
+        "id": "dsn-kv-ssl-port",
+        "requirements": ["DSN-02", "DSN-06"],
+        "input": "Database=TESTDB;ssl=yes",
+        "expect": {
+          "use_ssl": true,
+          "port": 50001
+        }
+      },
+      {
+        "id": "dsn-kv-ssl-explicit-port",
+        "requirements": ["DSN-02", "DSN-06"],
+        "input": "Database=TESTDB;ssl=yes;port=50000",
+        "expect": {
+          "use_ssl": true,
+          "port": 50000
+        }
+      },
+      {
+        "id": "dsn-kv-ibm-tls",
+        "requirements": ["DSN-02", "DSN-06"],
+        "input": "Server=db.example.test:50001;Database=TEST;UID=user;PWD=secret;Security=SSL;SSLServerCertificate=/tmp/db2-ca.pem",
+        "expect": {
+          "host": "db.example.test",
+          "port": 50001,
+          "database": "TEST",
+          "user": "user",
+          "password": "secret",
+          "use_ssl": true,
+          "ssl_root_ca_path": "/tmp/db2-ca.pem"
+        }
+      }
+    ],
+    "reject": [
+      {
+        "id": "dsn-reject-empty",
+        "requirements": ["DSN-10"],
+        "input": ""
+      },
+      {
+        "id": "dsn-reject-blank",
+        "requirements": ["DSN-10"],
+        "input": "   "
+      },
+      {
+        "id": "dsn-reject-url-no-database",
+        "requirements": ["DSN-10"],
+        "input": "db2://host"
+      },
+      {
+        "id": "dsn-reject-url-empty-database",
+        "requirements": ["DSN-10"],
+        "input": "db2://u:secret@host/"
+      },
+      {
+        "id": "dsn-reject-url-port-zero",
+        "requirements": ["DSN-02"],
+        "input": "db2://user:pass@host:0/TESTDB"
+      },
+      {
+        "id": "dsn-reject-url-port-high",
+        "requirements": ["DSN-02"],
+        "input": "db2://user:pass@host:70000/TESTDB"
+      },
+      {
+        "id": "dsn-reject-malformed-escape",
+        "requirements": ["DSN-01"],
+        "input": "db2://user:pa%ZZss@host/TESTDB"
+      },
+      {
+        "id": "dsn-reject-url-authentication",
+        "requirements": ["DSN-04", "DSN-05"],
+        "input": "db2://u:p@host/TESTDB?Authentication=BOGUS"
+      },
+      {
+        "id": "dsn-reject-kv-authentication",
+        "requirements": ["DSN-04", "DSN-05"],
+        "input": "Database=TESTDB;Authentication=TOKEN"
+      },
+      {
+        "id": "dsn-reject-block-size-small",
+        "requirements": ["DSN-02"],
+        "input": "db2://u:p@host/TESTDB?block_size=512"
+      },
+      {
+        "id": "dsn-reject-block-size-text",
+        "requirements": ["DSN-02"],
+        "input": "db2://u:p@host/TESTDB?block_size=abc"
+      },
+      {
+        "id": "dsn-reject-block-size-high",
+        "requirements": ["DSN-02"],
+        "input": "Database=TESTDB;block_size=1048577"
+      },
+      {
+        "id": "dsn-reject-current-schema-blank",
+        "requirements": ["DSN-03"],
+        "input": "Database=TESTDB;CurrentSchema=   "
+      },
+      {
+        "id": "dsn-reject-unknown-kerberos",
+        "requirements": ["DSN-08"],
+        "input": "Database=TESTDB;krb5_ticket_lifetime=x"
+      },
+      {
+        "id": "dsn-reject-security-mode",
+        "requirements": ["DSN-05", "DSN-06"],
+        "input": "Database=TESTDB;Security=SERVER_ENCRYPT"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "id": "error-sql-cancelled",
+      "requirements": ["ERR-03", "ERR-04", "ERR-05", "ERR-06", "OUT-03", "OUT-09", "CAN-03"],
+      "input": {
+        "kind": "sql",
+        "sql_code": -952,
+        "sql_state": "57014",
+        "message": "operation cancelled"
+      },
+      "expect": {
+        "category": "operation-cancelled",
+        "outcome": "confirmed",
+        "sql_code": -952,
+        "sql_state": "57014",
+        "message_contains": ["SQLCODE=-952", "SQLSTATE=57014"]
+      }
+    },
+    {
+      "id": "error-sql-constraint",
+      "requirements": ["ERR-03", "ERR-04", "ERR-05", "ERR-06", "OUT-03"],
+      "input": {
+        "kind": "sql",
+        "sql_code": -803,
+        "sql_state": "23505",
+        "message": "duplicate key"
+      },
+      "expect": {
+        "category": "sql-server",
+        "outcome": "confirmed",
+        "sql_code": -803,
+        "sql_state": "23505",
+        "message_contains": ["SQLCODE=-803", "SQLSTATE=23505"]
+      }
+    },
+    {
+      "id": "error-sql-syntax",
+      "requirements": ["ERR-03", "ERR-04", "ERR-05", "ERR-06", "OUT-03"],
+      "input": {
+        "kind": "sql",
+        "sql_code": -104,
+        "sql_state": "42601",
+        "message": "syntax error"
+      },
+      "expect": {
+        "category": "sql-server",
+        "outcome": "confirmed",
+        "sql_code": -104,
+        "sql_state": "42601",
+        "message_contains": ["SQLCODE=-104", "SQLSTATE=42601"]
+      }
+    },
+    {
+      "id": "error-sql-object-not-found",
+      "requirements": ["ERR-03", "ERR-04", "ERR-05", "ERR-06", "OUT-03"],
+      "input": {
+        "kind": "sql",
+        "sql_code": -204,
+        "sql_state": "42704",
+        "message": "object not found"
+      },
+      "expect": {
+        "category": "sql-server",
+        "outcome": "confirmed",
+        "sql_code": -204,
+        "sql_state": "42704",
+        "message_contains": ["SQLCODE=-204", "SQLSTATE=42704"]
+      }
+    },
+    {
+      "id": "error-configuration",
+      "requirements": ["ERR-02", "ERR-03", "OUT-02"],
+      "input": {
+        "kind": "configuration",
+        "message": "invalid configuration"
+      },
+      "expect": {
+        "category": "configuration",
+        "outcome": "not-started"
+      }
+    },
+    {
+      "id": "error-pool-timeout",
+      "requirements": ["ERR-02", "POOL-03", "OUT-02"],
+      "input": {
+        "kind": "pool-timeout",
+        "message": "pool acquire timed out"
+      },
+      "expect": {
+        "category": "pool-timeout",
+        "outcome": "not-started"
+      }
+    },
+    {
+      "id": "error-pool-exhausted",
+      "requirements": ["ERR-02", "POOL-03", "OUT-02"],
+      "input": {
+        "kind": "pool-exhausted",
+        "message": "pool waiter queue is full"
+      },
+      "expect": {
+        "category": "pool-exhausted",
+        "outcome": "not-started"
+      }
+    },
+    {
+      "id": "error-timeout",
+      "requirements": ["ERR-02", "CAN-08", "OUT-04"],
+      "input": {
+        "kind": "timeout",
+        "message": "command deadline expired"
+      },
+      "expect": {
+        "category": "timeout",
+        "outcome": "unknown"
+      }
+    },
+    {
+      "id": "error-server-response",
+      "requirements": ["ERR-02", "ERR-03", "OUT-04"],
+      "input": {
+        "kind": "server-response",
+        "message": "incomplete server diagnostic"
+      },
+      "expect": {
+        "category": "server-response",
+        "outcome": "unknown"
+      }
+    }
+  ],
+  "limits": [
+    {
+      "id": "limit-max-dss-size",
+      "requirements": ["LIM-02"],
+      "field": "max_dss_size",
+      "value": 67108864
+    },
+    {
+      "id": "limit-max-ddm-object-size",
+      "requirements": ["LIM-02"],
+      "field": "max_ddm_object_size",
+      "value": 67108864
+    },
+    {
+      "id": "limit-max-reply-chain-bytes",
+      "requirements": ["LIM-02"],
+      "field": "max_reply_chain_bytes",
+      "value": 268435456
+    },
+    {
+      "id": "limit-max-reply-chain-packets",
+      "requirements": ["LIM-02"],
+      "field": "max_reply_chain_packets",
+      "value": 4096
+    },
+    {
+      "id": "limit-max-materialized-lob-size",
+      "requirements": ["LIM-02"],
+      "field": "max_materialized_lob_size",
+      "value": 16777216
+    },
+    {
+      "id": "limit-max-materialized-result-bytes",
+      "requirements": ["LIM-02"],
+      "field": "max_materialized_result_bytes",
+      "value": 33554432
+    },
+    {
+      "id": "limit-max-streamed-lob-bytes",
+      "requirements": ["LIM-02", "BAT-06"],
+      "field": "max_streamed_lob_bytes",
+      "value": 1073741824
+    },
+    {
+      "id": "limit-lob-chunk-bytes",
+      "requirements": ["LIM-02", "BAT-06"],
+      "field": "lob_chunk_bytes",
+      "value": 65536
+    }
+  ],
+  "defaults": [
+    {
+      "id": "default-pool-max-connections",
+      "requirements": ["POOL-01"],
+      "surface": "pool",
+      "field": "max_connections",
+      "value": 10
+    },
+    {
+      "id": "default-pool-max-waiters",
+      "requirements": ["POOL-01"],
+      "surface": "pool",
+      "field": "max_waiters",
+      "value": 100
+    },
+    {
+      "id": "default-pool-acquire-timeout",
+      "requirements": ["POOL-01"],
+      "surface": "pool",
+      "field": "acquire_timeout_ms",
+      "value": 30000
+    },
+    {
+      "id": "default-pool-connect-timeout",
+      "requirements": ["POOL-01"],
+      "surface": "pool",
+      "field": "connect_timeout_ms",
+      "value": 10000
+    },
+    {
+      "id": "default-pool-idle-timeout",
+      "requirements": ["POOL-01"],
+      "surface": "pool",
+      "field": "idle_timeout_ms",
+      "value": 300000
+    },
+    {
+      "id": "default-pool-max-lifetime",
+      "requirements": ["POOL-01"],
+      "surface": "pool",
+      "field": "max_lifetime_ms",
+      "value": 1800000
+    },
+    {
+      "id": "default-pool-reap-interval",
+      "requirements": ["POOL-01"],
+      "surface": "pool",
+      "field": "reap_interval_ms",
+      "value": 30000
+    },
+    {
+      "id": "default-batch-max-rows",
+      "requirements": ["BAT-02"],
+      "surface": "batch",
+      "field": "max_rows",
+      "value": 256
+    },
+    {
+      "id": "default-batch-max-encoded-bytes",
+      "requirements": ["BAT-02"],
+      "surface": "batch",
+      "field": "max_encoded_bytes",
+      "value": 8388608
+    },
+    {
+      "id": "default-import-max-batch-rows",
+      "requirements": ["BAT-05"],
+      "surface": "import",
+      "field": "max_batch_rows",
+      "value": 256
+    },
+    {
+      "id": "default-import-max-batch-bytes",
+      "requirements": ["BAT-05"],
+      "surface": "import",
+      "field": "max_batch_bytes",
+      "value": 8388608
+    },
+    {
+      "id": "default-import-notify-after-rows",
+      "requirements": ["BAT-05"],
+      "surface": "import",
+      "field": "notify_after_rows",
+      "value": 10000
+    },
+    {
+      "id": "default-import-table-lock",
+      "requirements": ["BAT-05"],
+      "surface": "import",
+      "field": "table_lock",
+      "value": false
+    },
+    {
+      "id": "default-import-policy",
+      "requirements": ["BAT-05"],
+      "surface": "import",
+      "field": "policy",
+      "value": "atomic"
+    }
+  ],
+  "bounds": [
+    {
+      "id": "bound-batch-max-rows",
+      "requirements": ["BAT-02"],
+      "surface": "batch",
+      "field": "max_rows",
+      "min": 1,
+      "max": 32767
+    },
+    {
+      "id": "bound-batch-max-encoded-bytes",
+      "requirements": ["BAT-02"],
+      "surface": "batch",
+      "field": "max_encoded_bytes",
+      "min": 1
+    },
+    {
+      "id": "bound-pool-max-connections",
+      "requirements": ["POOL-02"],
+      "surface": "pool",
+      "field": "max_connections",
+      "min": 1
+    },
+    {
+      "id": "bound-pool-max-waiters",
+      "requirements": ["POOL-02"],
+      "surface": "pool",
+      "field": "max_waiters",
+      "min": 0
+    },
+    {
+      "id": "bound-import-max-batch-rows",
+      "requirements": ["BAT-05"],
+      "surface": "import",
+      "field": "max_batch_rows",
+      "min": 1
+    },
+    {
+      "id": "bound-import-max-batch-bytes",
+      "requirements": ["BAT-05"],
+      "surface": "import",
+      "field": "max_batch_bytes",
+      "min": 1
+    },
+    {
+      "id": "bound-import-notify-after-rows",
+      "requirements": ["BAT-05"],
+      "surface": "import",
+      "field": "notify_after_rows",
+      "min": 1
+    }
+  ]
+}
