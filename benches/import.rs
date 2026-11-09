@@ -3,9 +3,9 @@
 //! Timing uses Criterion; allocation figures use `stats_alloc` regions printed
 //! to stderr (visible in bench logs) and recorded in BENCHMARK-BASELINE.md.
 //! Only the public crate surface is used, so no `bench-internals` is required.
-use std::{alloc::System, time::Instant};
+use std::{alloc::System, hint::black_box, time::Instant};
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use justybase_db2::{
     Db2ImportColumn, Db2ImportTarget, Db2Value, converters::sql_dta,
     network::ddm::ColumnDescription,

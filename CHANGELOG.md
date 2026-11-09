@@ -8,6 +8,10 @@ The project follows Semantic Versioning.
 
 ### Changed
 
+- Updated direct dependencies to the latest stable releases, including tokio
+  1.54.1, tokio-rustls 0.26.6, rustls-native-certs 0.8.5, rustls-pki-types
+  1.15.1, des 0.9.0, crypto-bigint 0.7.11 and criterion 0.8.2. The DES helpers
+  now use the cipher 0.5 block API.
 - Added the self-contained JDC v1 contract (`docs/DRIVER-CONTRACT.md`) and the
   repo-specific conformance record (`docs/DRIVER-CONTRACT-STATUS.md`). No API or
   behaviour changes.

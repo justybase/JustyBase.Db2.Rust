@@ -10990,13 +10990,13 @@ mod tests {
     }
 
     fn secmec9_des_decrypt(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Vec<u8> {
-        use des::cipher::{Block, BlockDecrypt, KeyInit};
+        use des::cipher::{Block, BlockCipherDecrypt, KeyInit};
         let cipher = des::Des::new_from_slice(key).unwrap();
         let mut previous = [0u8; 8];
         previous.copy_from_slice(iv);
         let mut output = Vec::new();
         for chunk in ciphertext.as_chunks::<8>().0 {
-            let mut block = Block::<des::Des>::clone_from_slice(chunk);
+            let mut block = Block::<des::Des>::from(*chunk);
             let incoming = block;
             cipher.decrypt_block(&mut block);
             for (index, byte) in block.iter_mut().enumerate() {

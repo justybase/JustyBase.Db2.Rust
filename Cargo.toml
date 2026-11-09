@@ -37,20 +37,20 @@ path = "src/lib.rs"
 bench-internals = []
 
 [dependencies]
-tokio = { version = "1.53", features = ["fs", "io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
-tokio-rustls = { version = "0.26.5", default-features = false, features = ["ring", "tls12"] }
-rustls-native-certs = "0.8.3"
-rustls-pki-types = { version = "1", features = ["std"] }
+tokio = { version = "1.54.1", features = ["fs", "io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
+rustls-native-certs = "0.8.5"
+rustls-pki-types = { version = "1.15.1", features = ["std"] }
 tempfile = "3.27.0"
-des = "0.8"
+des = "0.9.0"
 ring = "0.17.14"
-crypto-bigint = { version = "0.7.5", default-features = false }
+crypto-bigint = { version = "0.7.11", default-features = false }
 zeroize = "1.9.1"
 
 [dev-dependencies]
-criterion = { version = "0.5.1", features = ["async_tokio"] }
+criterion = { version = "0.8.2", features = ["async_tokio"] }
 stats_alloc = "0.1.10"
-serde_json = "1"
+serde_json = "1.0.154"
 
 [[bench]]
 name = "hot_paths"

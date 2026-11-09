@@ -13,7 +13,7 @@ use crypto_bigint::{
     prelude::CtLt,
 };
 use des::Des;
-use des::cipher::{Block, BlockEncrypt, KeyInit};
+use des::cipher::{Block, BlockCipherEncrypt, KeyInit};
 use ring::rand::{SecureRandom, SystemRandom};
 use std::fmt;
 use std::sync::LazyLock;
@@ -186,7 +186,7 @@ fn des_cbc_encrypt(key: &[u8], iv: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, S
     previous.copy_from_slice(iv);
     let mut output = Vec::with_capacity(padded.len());
     for chunk in padded.as_chunks::<8>().0 {
-        let mut block = Block::<Des>::clone_from_slice(chunk);
+        let mut block = Block::<Des>::from(*chunk);
         for (index, byte) in block.iter_mut().enumerate() {
             *byte ^= previous[index];
         }
@@ -344,13 +344,13 @@ mod tests {
     }
 
     fn des_cbc_decrypt(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Vec<u8> {
-        use des::cipher::BlockDecrypt;
+        use des::cipher::BlockCipherDecrypt;
         let cipher = Des::new_from_slice(key).unwrap();
         let mut previous = [0u8; 8];
         previous.copy_from_slice(iv);
         let mut output = Vec::with_capacity(ciphertext.len());
         for chunk in ciphertext.as_chunks::<8>().0 {
-            let mut block = Block::<Des>::clone_from_slice(chunk);
+            let mut block = Block::<Des>::from(*chunk);
             let ciphertext_block = block;
             cipher.decrypt_block(&mut block);
             for (index, byte) in block.iter_mut().enumerate() {

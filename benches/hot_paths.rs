@@ -1,6 +1,4 @@
-use criterion::{
-    BatchSize, BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main,
-};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use justybase_db2::{
     Db2Value,
     converters::{decfloat, sql_dta},
@@ -10,6 +8,7 @@ use justybase_db2::{
         dss, session,
     },
 };
+use std::hint::black_box;
 use std::{
     collections::VecDeque,
     io::{Cursor, IoSlice},
