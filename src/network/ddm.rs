@@ -762,7 +762,7 @@ fn pack_query(
     } else {
         body.extend_from_slice(&6u16.to_be_bytes());
         body.extend_from_slice(&cp::MAXBLKEXT.0.to_be_bytes());
-        body.extend_from_slice(&(block_size as u16).to_be_bytes());
+        body.extend_from_slice(&(block_size.min(u16::MAX as u32) as u16).to_be_bytes());
         body.extend_from_slice(PARAM_QRYCLSIMP);
         if codepoint == cp::OPNQRY {
             body.extend_from_slice(&pack_bytes(cp::DYNDTAFMT, &[0xf1]));
@@ -1817,6 +1817,15 @@ mod tests {
         assert_eq!(&request[2..4], &cp::OPNQRY.0.to_be_bytes());
         assert_eq!(parameters[&cp::DYNDTAFMT], [0xf1]);
         assert_eq!(parameters[&cp::QRYBLKSZ], 65_535_u32.to_be_bytes());
+        assert_eq!(parameters[&cp::MAXBLKEXT], u16::MAX.to_be_bytes());
+    }
+
+    #[test]
+    fn open_query_clamps_max_block_extension_above_u16() {
+        let request = pack_open_query_with_params("SQLC0X0", "SYSLVL01", 65, "TESTDB", 70_000);
+        let parameters = parse_ddm_parameters(&request[4..]).unwrap();
+
+        assert_eq!(parameters[&cp::QRYBLKSZ], 70_000_u32.to_be_bytes());
         assert_eq!(parameters[&cp::MAXBLKEXT], u16::MAX.to_be_bytes());
     }
 

@@ -8,6 +8,19 @@ The project follows Semantic Versioning.
 
 ### Changed
 
+- Procedure materialization now returns each front row in O(1) instead of
+  moving the whole buffered `VecDeque` per row, so wide procedure cursors are no
+  longer quadratic in their block size.
+- The materialized-result budget counts the resident `Db2Value` and row-vector
+  overhead as well as payload bytes, keeping an all-NULL wide result inside the
+  documented 32 MiB bound.
+- Pipelined batch chunks are capped by `max_reply_chain_packets / 2` so a valid
+  `Db2BatchOptions` row limit cannot overflow the reply-chain bound at runtime.
+- The row decoder accepts `0x42`/`0x43` LONG VARCHAR, uses the 16-byte width for
+  DECFLOAT(34), and `MAXBLKEXT` is clamped to `0xFFFF` above 65535.
+- A server-confirmed SQL error during an initial query reply no longer closes
+  the session; decode/protocol failures still fail closed.
+
 - Updated direct dependencies to the latest stable releases, including tokio
   1.54.1, tokio-rustls 0.26.6, rustls-native-certs 0.8.5, rustls-pki-types
   1.15.1, des 0.9.0, crypto-bigint 0.7.11 and criterion 0.8.2. The DES helpers

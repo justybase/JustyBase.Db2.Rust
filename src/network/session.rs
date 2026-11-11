@@ -1125,43 +1125,47 @@ impl Db2ProcedureReader<'_> {
         }
         loop {
             let index = self.current_cursor;
-            let (pending, warnings) = {
+            let warnings = {
                 let cursor = &mut self.cursors[index];
                 let max_lob_size = self
                     .session
                     .config
                     .protocol_limits
                     .max_materialized_lob_size;
-                let warnings = decode_procedure_cursor_available(cursor, max_lob_size)?;
-                let unresolved = cursor.buffered_rows.iter().any(|row| {
-                    has_unresolved_external_locator(&cursor.fields, std::slice::from_ref(row))
-                });
-                if !cursor.buffered_rows.is_empty() && !unresolved {
-                    (
-                        Some(
-                            std::mem::take(&mut cursor.buffered_rows)
-                                .into_iter()
-                                .collect::<Vec<_>>(),
-                        ),
-                        warnings,
-                    )
-                } else {
-                    (None, warnings)
-                }
+                decode_procedure_cursor_available(cursor, max_lob_size)?
             };
             self.session.report_warnings(warnings);
-            if let Some(mut rows) = pending {
-                let (query_id, correlation_id, fields) = {
-                    let cursor = &self.cursors[index];
-                    (
-                        cursor.query_id,
-                        cursor.next_correlation,
-                        cursor.fields.clone(),
-                    )
-                };
+
+            // Only the front row must be complete before it can be returned:
+            // EXTDTA values are consumed in row order, so later buffered rows
+            // may legitimately still wait for their external value while the
+            // caller reads the front one. The previous implementation moved
+            // the whole VecDeque into a Vec on every row (O(rows^2) per block).
+            let front_needs_external =
+                self.cursors[index]
+                    .buffered_rows
+                    .front()
+                    .is_some_and(|row| {
+                        has_unresolved_external_locator(
+                            &self.cursors[index].fields,
+                            std::slice::from_ref(row),
+                        )
+                    });
+            if !front_needs_external
+                && let Some(mut row) = self.cursors[index].buffered_rows.pop_front()
+            {
+                let cursor = &self.cursors[index];
+                let fields = &cursor.fields;
+                let query_id = cursor.query_id;
+                let correlation_id = cursor.next_correlation;
                 let resolved = self
                     .session
-                    .resolve_progressive_lobs(&mut rows, &fields, query_id, correlation_id)
+                    .resolve_progressive_lobs(
+                        std::slice::from_mut(&mut row),
+                        fields,
+                        query_id,
+                        correlation_id,
+                    )
                     .await;
                 if let Err(error) = resolved {
                     if is_confirmed_interrupt(&error) {
@@ -1177,8 +1181,7 @@ impl Db2ProcedureReader<'_> {
                     }
                     return Err(error);
                 }
-                self.cursors[index].buffered_rows.extend(rows);
-                return Ok(self.cursors[index].buffered_rows.pop_front());
+                return Ok(Some(row));
             }
 
             if self.cursors[index].ended {
@@ -2885,7 +2888,10 @@ impl Db2Session {
         let (rows, warnings) = match consume_stream_replies_flat(replies, &mut state) {
             Ok(rows) => rows,
             Err(error) => {
-                if !state.ended {
+                // A server-confirmed SQL error ends the request cleanly, so the
+                // session stays reusable. Only decode/protocol failures leave
+                // an open cursor behind and must retire the session.
+                if error.outcome != Db2OperationOutcome::Confirmed && !state.ended {
                     self.closed = true;
                 }
                 return Err(error);
@@ -3755,6 +3761,7 @@ impl Db2Session {
         let mut completed = 0;
         let mut rows_affected = 0;
         let mut active_index = None;
+        let max_rows = batch_options.max_rows.min(self.batch_pipeline_row_cap());
         let result = run_with_command_deadline(command_options, interrupt, async {
             let statement = self.prepare_inner(sql).await?;
             if statement.parameter_columns.is_empty() || is_call_statement(&statement.sql) {
@@ -3767,7 +3774,7 @@ impl Db2Session {
                     active_index = None;
                 }
             } else {
-                let mut batch = Vec::with_capacity(batch_options.max_rows);
+                let mut batch = Vec::with_capacity(max_rows);
                 let mut batch_bytes = 0usize;
                 let mut batch_start = 0usize;
                 for (index, parameters) in parameter_sets.iter().enumerate() {
@@ -3803,7 +3810,7 @@ impl Db2Session {
                         continue;
                     }
                     if !batch.is_empty()
-                        && (batch.len() == batch_options.max_rows
+                        && (batch.len() == max_rows
                             || batch_bytes.saturating_add(encoded.sql_dta.len())
                                 > batch_options.max_encoded_bytes)
                     {
@@ -3864,6 +3871,14 @@ impl Db2Session {
                 ))
             }
         }
+    }
+
+    /// A pipelined chunk sends two to three requests per row and receives at
+    /// least one reply packet per execute (plus commit cards). Keep the chunk
+    /// inside the configured reply-chain packet bound so a valid
+    /// `Db2BatchOptions` cannot fail at runtime and discard the session.
+    fn batch_pipeline_row_cap(&self) -> usize {
+        (self.config.protocol_limits.max_reply_chain_packets / 2).max(1)
     }
 
     async fn execute_encoded_batch_chunk(
@@ -4024,8 +4039,9 @@ impl Db2Session {
         let mut rows_affected = 0;
         let mut active_index = None;
         let batch_options = Db2BatchOptions::default();
+        let max_rows = batch_options.max_rows.min(self.batch_pipeline_row_cap());
         let result = run_with_command_deadline(options, interrupt, async {
-            let mut batch = Vec::with_capacity(batch_options.max_rows);
+            let mut batch = Vec::with_capacity(max_rows);
             let mut batch_bytes = 0usize;
             let mut batch_start = 0usize;
             for (index, parameters) in parameter_sets.iter().enumerate() {
@@ -4062,7 +4078,7 @@ impl Db2Session {
                     continue;
                 }
                 if !batch.is_empty()
-                    && (batch.len() == batch_options.max_rows
+                    && (batch.len() == max_rows
                         || batch_bytes.saturating_add(encoded.sql_dta.len())
                             > batch_options.max_encoded_bytes)
                 {
@@ -5821,14 +5837,29 @@ impl Db2Session {
                                result: &mut Db2QueryResult|
          -> Result<(), Db2Error> {
             for row in &rows {
+                // Count the resident cost, not just the wire payload: every
+                // cell is a Db2Value enum and every row owns a Vec header.
+                // Counting payload only let an all-NULL wide result exceed the
+                // documented 32 MiB bound by more than an order of magnitude.
+                let row_bytes = std::mem::size_of::<Vec<Db2Value>>();
+                if row_bytes
+                    > MAX_MATERIALIZED_RESULT_BYTES.saturating_sub(materialized_result_bytes)
+                {
+                    return Err(Db2Error::resource_limit(format!(
+                        "DB2 materialized result exceeds the {MAX_MATERIALIZED_RESULT_BYTES}-byte limit"
+                    )));
+                }
+                materialized_result_bytes += row_bytes;
                 for value in row {
-                    let bytes = match value {
-                        Db2Value::Null => 1,
-                        Db2Value::Text(text) | Db2Value::Decimal(text) => text.len(),
-                        Db2Value::Bytes(data) => data.len(),
-                        _ => 16,
-                    };
-                    if bytes > MAX_MATERIALIZED_RESULT_BYTES - materialized_result_bytes {
+                    let bytes = std::mem::size_of::<Db2Value>()
+                        + match value {
+                            Db2Value::Text(text) | Db2Value::Decimal(text) => text.len(),
+                            Db2Value::Bytes(data) => data.len(),
+                            _ => 0,
+                        };
+                    if bytes
+                        > MAX_MATERIALIZED_RESULT_BYTES.saturating_sub(materialized_result_bytes)
+                    {
                         return Err(Db2Error::resource_limit(format!(
                             "DB2 materialized result exceeds the {MAX_MATERIALIZED_RESULT_BYTES}-byte limit"
                         )));
@@ -5839,7 +5870,19 @@ impl Db2Session {
             result.rows.extend(rows);
             Ok(())
         };
-        let (mut rows, warnings) = consume_stream_replies(replies, &mut state)?;
+        let (mut rows, warnings) = match consume_stream_replies(replies, &mut state) {
+            Ok(value) => value,
+            Err(error) => {
+                // A client-side decode error leaves the server cursor open.
+                // The session cannot be proven synchronized, so retire it.
+                // A server-confirmed SQL error (for example -104 before the
+                // cursor opens) is complete and keeps the session usable.
+                if error.outcome != Db2OperationOutcome::Confirmed {
+                    self.closed = true;
+                }
+                return Err(error);
+            }
+        };
         self.report_warnings(warnings);
         self.resolve_progressive_lobs(
             &mut rows,
@@ -5848,7 +5891,10 @@ impl Db2Session {
             state.next_correlation,
         )
         .await?;
-        append_rows(rows, &mut result)?;
+        if let Err(error) = append_rows(rows, &mut result) {
+            self.closed = true;
+            return Err(error);
+        }
         while state.open && !state.ended {
             let prior_pending = state.pending_row_data.len();
             let prior_external = state.extdta.len();
@@ -5866,7 +5912,15 @@ impl Db2Session {
             let got_data = replies
                 .iter()
                 .any(|reply| matches!(reply.codepoint, cp::QRYDTA | cp::EXTDTA));
-            let (mut rows, warnings) = consume_stream_replies(replies, &mut state)?;
+            let (mut rows, warnings) = match consume_stream_replies(replies, &mut state) {
+                Ok(value) => value,
+                Err(error) => {
+                    if error.outcome != Db2OperationOutcome::Confirmed {
+                        self.closed = true;
+                    }
+                    return Err(error);
+                }
+            };
             self.report_warnings(warnings);
             self.resolve_progressive_lobs(
                 &mut rows,
@@ -5875,12 +5929,16 @@ impl Db2Session {
                 state.next_correlation,
             )
             .await?;
-            append_rows(rows, &mut result)?;
+            if let Err(error) = append_rows(rows, &mut result) {
+                self.closed = true;
+                return Err(error);
+            }
             if !got_data
                 && state.pending_row_data.len() == prior_pending
                 && state.extdta.len() == prior_external
                 && !state.ended
             {
+                self.closed = true;
                 return Err(Db2Error::other(
                     "DB2 CNTQRY returned neither query data nor an end-of-query reply".into(),
                 ));
@@ -5890,6 +5948,7 @@ impl Db2Session {
             || !state.extdta.is_empty()
             || has_unresolved_external_locator(&state.fields, &result.rows)
         {
+            self.closed = true;
             return Err(Db2Error::other(
                 "DB2 ended a query with incomplete row or external LOB data".into(),
             ));
@@ -6920,20 +6979,8 @@ fn decode_procedure_cursor_available(
     cursor: &mut ProcedureCursorState,
     max_materialized_lob_size: usize,
 ) -> Result<Vec<crate::Db2Warning>, Db2Error> {
-    let mut rows = std::mem::take(&mut cursor.buffered_rows)
-        .into_iter()
-        .collect::<Vec<_>>();
-    let external_used = stitch_extdta_limited(
-        &cursor.fields,
-        &mut rows,
-        &cursor.extdta,
-        false,
-        max_materialized_lob_size,
-    )?;
-    if external_used > 0 {
-        cursor.extdta.drain(..external_used);
-    }
-
+    // ENDQRYRM can arrive in the same reply chain as the last QRYDTA rows, so
+    // decode any pending row data even when `ended` is already set.
     let (mut newly_decoded, consumed, warnings) =
         decode_rows_incremental(&cursor.fields, cursor.row_data.as_slice())?;
     if consumed > 0 {
@@ -6943,18 +6990,23 @@ fn decode_procedure_cursor_available(
         cursor.row_data.consume(terminal_len);
         cursor.ended = true;
     }
-    rows.append(&mut newly_decoded);
-    let external_used = stitch_extdta_limited(
-        &cursor.fields,
-        &mut rows,
-        &cursor.extdta,
-        false,
-        max_materialized_lob_size,
-    )?;
-    if external_used > 0 {
-        cursor.extdta.drain(..external_used);
+    cursor.buffered_rows.extend(newly_decoded.drain(..));
+
+    // Stitching walks the buffered rows in order and consumes the EXTDTA queue
+    // in the same order. It only needs to run when new external values arrived;
+    // already-stitched rows before the front remain valid.
+    if !cursor.extdta.is_empty() {
+        let external_used = stitch_extdta_deque_limited(
+            &cursor.fields,
+            &mut cursor.buffered_rows,
+            &cursor.extdta,
+            false,
+            max_materialized_lob_size,
+        )?;
+        if external_used > 0 {
+            cursor.extdta.drain(..external_used);
+        }
     }
-    cursor.buffered_rows = rows.into();
     Ok(warnings)
 }
 
@@ -7703,7 +7755,7 @@ fn decode_field(
             Db2Value::Float(f32::from_bits(u32::from_le_bytes(bytes.try_into().unwrap())) as f64)
         }
         0x30 | 0x31 | 0x3c | 0x3d => Db2Value::Text(read_utf8(data, offset, fixed_len)?),
-        0x32 | 0x33 | 0x34 | 0x35 | 0x3e | 0x3f | 0x40 | 0x41 => {
+        0x32 | 0x33 | 0x34 | 0x35 | 0x3e | 0x3f | 0x40 | 0x41 | 0x42 | 0x43 => {
             let length = read_length(data, offset)?;
             Db2Value::Text(read_utf8(data, offset, length)?)
         }
@@ -7737,7 +7789,7 @@ fn decode_field(
             decode_dfp(take(
                 data,
                 offset,
-                if ps[0] == 16 || ps[1] == 16 { 16 } else { 8 },
+                if ps[0] >= 16 || ps[1] == 16 { 16 } else { 8 },
             )?)
             .map_err(Db2Error::from)?,
         ),
@@ -7946,6 +7998,27 @@ fn stitch_extdta_limited<'a>(
     let mut value_index = 0;
     let mut values = values.into_iter();
     for row in rows {
+        value_index += stitch_extdta_row(
+            fields,
+            row,
+            &mut values,
+            external_values_have_null_indicator,
+            max_materialized_lob_size,
+        )?;
+    }
+    Ok(value_index)
+}
+
+fn stitch_extdta_deque_limited<'a>(
+    fields: &[FieldDescriptor],
+    rows: &mut VecDeque<Vec<Db2Value>>,
+    values: impl IntoIterator<Item = &'a Vec<u8>>,
+    external_values_have_null_indicator: bool,
+    max_materialized_lob_size: usize,
+) -> Result<usize, Db2Error> {
+    let mut value_index = 0;
+    let mut values = values.into_iter();
+    for row in rows.iter_mut() {
         value_index += stitch_extdta_row(
             fields,
             row,
@@ -9949,6 +10022,63 @@ mod tests {
         assert!(warnings.is_empty());
         assert!(partial_rows.is_empty());
         assert_eq!(consumed, 0, "a split inline LOB row must be retained whole");
+    }
+
+    #[test]
+    fn query_data_decodes_long_varchar_and_long_varbinary_codepoints() {
+        let fields = [
+            FieldDescriptor {
+                field_type: 0x42,
+                precision_scale: [0, 0],
+            },
+            FieldDescriptor {
+                field_type: 0x43,
+                precision_scale: [0, 0],
+            },
+            FieldDescriptor {
+                field_type: 0x1e,
+                precision_scale: [0, 4],
+            },
+            FieldDescriptor {
+                field_type: 0x1f,
+                precision_scale: [0, 4],
+            },
+        ];
+        let mut data = vec![0xff, 0];
+        data.extend_from_slice(&[0, 9]);
+        data.extend_from_slice(b"long text");
+        data.extend_from_slice(&[0, 0, 3]);
+        data.extend_from_slice(b"abc");
+        data.extend_from_slice(&[1, 2, 3, 4]);
+        data.extend_from_slice(&[0, 5, 6, 7, 8]);
+
+        let (rows, consumed, warnings) = decode_rows_incremental(&fields, &data).unwrap();
+        assert!(warnings.is_empty());
+        assert_eq!(consumed, data.len());
+        assert_eq!(
+            rows,
+            vec![vec![
+                Db2Value::Text("long text".into()),
+                Db2Value::Text("abc".into()),
+                Db2Value::Bytes(vec![1, 2, 3, 4]),
+                Db2Value::Bytes(vec![5, 6, 7, 8]),
+            ]]
+        );
+    }
+
+    #[test]
+    fn query_data_decodes_decfloat34_with_sixteen_byte_width() {
+        let value = "12345678901234567890.12345678901234";
+        let fields = [FieldDescriptor {
+            field_type: 0xbb,
+            precision_scale: [34, 0],
+        }];
+        let mut data = vec![0xff, 0, 0];
+        data.extend_from_slice(&crate::converters::decfloat::encode_dfp(value, 16).unwrap());
+
+        let (rows, consumed, _) = decode_rows_incremental(&fields, &data).unwrap();
+        assert_eq!(consumed, data.len());
+        assert_eq!(rows, vec![vec![Db2Value::Decimal(value.into())]]);
     }
 
     #[test]
