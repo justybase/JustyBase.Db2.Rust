@@ -10,6 +10,9 @@ The project follows Semantic Versioning.
 
 - A parameter that the server describes as GRAPHIC, VARBINARY or BINARY with
   a length above 65535 is refused before any buffer is sized from it.
+- SQLDARD and SQLCINRD column name parsing no longer rescans the reply for
+  the name delimiter once it is absent, and the column reservation is capped
+  by the bytes present.
 
 ### Changed
 
