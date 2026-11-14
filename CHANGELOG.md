@@ -6,6 +6,11 @@ The project follows Semantic Versioning.
 
 ## Unreleased
 
+### Security
+
+- A parameter that the server describes as GRAPHIC, VARBINARY or BINARY with
+  a length above 65535 is refused before any buffer is sized from it.
+
 ### Changed
 
 - Procedure materialization now returns each front row in O(1) instead of
