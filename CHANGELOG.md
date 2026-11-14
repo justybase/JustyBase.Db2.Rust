@@ -13,6 +13,10 @@ The project follows Semantic Versioning.
 - SQLDARD and SQLCINRD column name parsing no longer rescans the reply for
   the name delimiter once it is absent, and the column reservation is capped
   by the bytes present.
+- A CNTQRY reply with an empty QRYDTA is no longer progress, so a server that
+  keeps sending empty blocks ends the query with an error instead of a loop;
+  partial-row and EXTDTA data kept across CNTQRY rounds must stay within the
+  protocol limits.
 
 ### Changed
 
