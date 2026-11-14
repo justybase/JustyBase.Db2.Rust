@@ -772,9 +772,6 @@ impl<'session> Db2RowReader<'session> {
                     return Err(error);
                 }
             };
-            let got_data = replies
-                .iter()
-                .any(|reply| matches!(reply.codepoint, cp::QRYDTA | cp::EXTDTA));
             let (rows, warnings) = match consume_stream_replies_flat(replies, &mut self.state) {
                 Ok(rows) => rows,
                 Err(error) => {
@@ -786,7 +783,15 @@ impl<'session> Db2RowReader<'session> {
             };
             self.session.report_warnings(warnings);
             self.rows.push(rows);
-            if !got_data
+            if let Err(error) =
+                stream_buffers_within(&self.state, &self.session.config.protocol_limits)
+            {
+                self.session.closed = true;
+                return Err(error);
+            }
+            // Progress is a row, more buffered data or the end of the query.
+            // An empty QRYDTA is not progress.
+            if !self.rows.has_next()
                 && self.state.pending_row_data.len() == prior_pending
                 && self.state.extdta.len() == prior_extdta
                 && !self.state.ended
@@ -5909,9 +5914,6 @@ impl Db2Session {
             self.send(&next, false, true, Some(state.next_correlation))
                 .await?;
             let replies = self.read_reply_chain().await?;
-            let got_data = replies
-                .iter()
-                .any(|reply| matches!(reply.codepoint, cp::QRYDTA | cp::EXTDTA));
             let (mut rows, warnings) = match consume_stream_replies(replies, &mut state) {
                 Ok(value) => value,
                 Err(error) => {
@@ -5921,6 +5923,11 @@ impl Db2Session {
                     return Err(error);
                 }
             };
+            if let Err(error) = stream_buffers_within(&state, &self.config.protocol_limits) {
+                self.closed = true;
+                return Err(error);
+            }
+            let decoded = rows.len();
             self.report_warnings(warnings);
             self.resolve_progressive_lobs(
                 &mut rows,
@@ -5933,7 +5940,9 @@ impl Db2Session {
                 self.closed = true;
                 return Err(error);
             }
-            if !got_data
+            // Progress is a row, more buffered data or the end of the query.
+            // An empty QRYDTA is not progress.
+            if decoded == 0
                 && state.pending_row_data.len() == prior_pending
                 && state.extdta.len() == prior_external
                 && !state.ended
@@ -7303,6 +7312,27 @@ fn consume_stream_replies_flat(
         state.extdta.drain(..extdta_used);
     }
     Ok((rows, warnings))
+}
+
+/// Partial-row data and EXTDTA kept across CNTQRY rounds must stay within
+/// the configured limits; otherwise a reply stream that never completes a
+/// row grows without bound.
+fn stream_buffers_within(
+    state: &QueryStreamState,
+    limits: &crate::config::ProtocolLimits,
+) -> Result<(), Db2Error> {
+    let extdta = state
+        .extdta
+        .iter()
+        .fold(0usize, |sum, chunk| sum.saturating_add(chunk.len()));
+    if state.pending_row_data.len() > limits.max_ddm_object_size
+        || extdta > limits.max_reply_chain_bytes
+    {
+        return Err(Db2Error::protocol(
+            "DB2 query buffered more partial-row or EXTDTA data than the configured limits",
+        ));
+    }
+    Ok(())
 }
 
 fn consume_stream_reply_metadata(
@@ -12174,6 +12204,82 @@ mod tests {
 
         session.close().await.unwrap();
         server.await.unwrap();
+    }
+
+    /// Answers the query's OPNQRY without data, then every CNTQRY with an
+    /// empty QRYDTA, and returns how many CNTQRY requests arrived.
+    async fn serve_empty_query_blocks(listener: TcpListener) -> usize {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        serve_basic_handshake(&mut socket).await;
+        let query = read_chain(&mut socket).await;
+        assert_eq!(
+            query.iter().map(|p| p.codepoint).collect::<Vec<_>>(),
+            vec![cp::PRPSQLSTT, cp::SQLSTT, cp::OPNQRY]
+        );
+        send(&mut socket, cp::QRYDSC, &[6, 0x76, 0xd0, 0x02, 0, 4], true).await;
+        send(
+            &mut socket,
+            cp::OPNQRYRM,
+            &ddm::pack_bytes(cp::QRYINSID, &1u64.to_be_bytes()),
+            false,
+        )
+        .await;
+        let mut continues = 0;
+        while continues < 20 {
+            let Ok(packet) = dss::read_dss(&mut socket).await else {
+                break;
+            };
+            assert_eq!(packet.codepoint, cp::CNTQRY);
+            continues += 1;
+            send(&mut socket, cp::QRYDTA, &[], false).await;
+        }
+        continues
+    }
+
+    fn empty_blocks_config(port: u16) -> Config {
+        let mut config = Config::default();
+        config.host = "127.0.0.1".into();
+        config.port = port;
+        config.database = "TESTDB".into();
+        config.user = "db2inst1".into();
+        config.password = "password".into();
+        config.security_mechanism = 3;
+        config
+    }
+
+    #[tokio::test]
+    async fn query_fails_on_an_empty_query_block_instead_of_looping() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(serve_empty_query_blocks(listener));
+
+        let mut session = Db2Session::connect(empty_blocks_config(port))
+            .await
+            .unwrap();
+        let error = session.query("VALUES 1").await.unwrap_err();
+        assert!(error.to_string().contains("neither query data"), "{error}");
+        assert!(session.is_closed());
+        drop(session);
+        assert_eq!(server.await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn row_reader_fails_on_an_empty_query_block_instead_of_looping() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(serve_empty_query_blocks(listener));
+
+        let mut session = Db2Session::connect(empty_blocks_config(port))
+            .await
+            .unwrap();
+        {
+            let mut reader = session.query_stream("VALUES 1").await.unwrap();
+            let error = reader.next().await.unwrap_err();
+            assert!(error.to_string().contains("neither query data"), "{error}");
+        }
+        assert!(session.is_closed());
+        drop(session);
+        assert_eq!(server.await.unwrap(), 1);
     }
 
     #[tokio::test]

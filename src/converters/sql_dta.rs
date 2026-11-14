@@ -101,6 +101,19 @@ pub fn build_sql_dta_with_inputs(
             inputs.len()
         ));
     }
+    // The server's DESCRIBE INPUT sets these lengths and the FD:OCA
+    // descriptor carries them in two bytes. A larger value cannot be encoded
+    // and must not size the buffers below.
+    for column in columns {
+        if matches!(base_type(column.sql_type), 468 | 908 | 912)
+            && column.length > u64::from(u16::MAX)
+        {
+            return Err(format!(
+                "DB2 described parameter {} with unsupported length {}",
+                column.name, column.length
+            ));
+        }
+    }
     let mut external: Vec<Option<ExternalLobValue<'_>>> = Vec::with_capacity(columns.len());
     let mut has_non_empty_external = false;
     for (column, input) in columns.iter().zip(inputs) {
@@ -1128,6 +1141,21 @@ mod tests {
             scale,
             nullable: true,
         }
+    }
+
+    #[test]
+    fn described_lengths_beyond_two_bytes_are_refused() {
+        let value = Db2Value::Bytes(vec![1, 2, 3]);
+        let inputs = [Db2InputParameter::Value(&value)];
+        for sql_type in [468, 908, 912] {
+            let columns = [column(sql_type, u64::from(u16::MAX) + 1, 0, 0)];
+            let error = build_sql_dta_with_inputs(&columns, &inputs)
+                .err()
+                .expect("a length beyond two bytes must be refused");
+            assert!(error.contains("unsupported length"), "{sql_type}: {error}");
+        }
+        let columns = [column(912, u64::from(u16::MAX), 0, 0)];
+        assert!(build_sql_dta_with_inputs(&columns, &inputs).is_ok());
     }
 
     #[test]

@@ -1264,7 +1264,11 @@ pub fn parse_sql_dard(
     }
     let count = get_u16(rest, 0, little_endian) as usize;
     rest = &rest[2..];
-    let mut cols = Vec::with_capacity(count);
+    // Each column needs at least 16 bytes, so the data bounds the reservation.
+    let mut cols = Vec::with_capacity(count.min(rest.len() / 16));
+    // Once no FF FF FF delimiter is left, no later suffix has one either;
+    // scanning again for every column is quadratic in a malformed reply.
+    let mut delimiter_absent = false;
     for index in 0..count {
         if rest.len() < 16 {
             return Err(crate::Db2Error::from(format!(
@@ -1278,7 +1282,13 @@ pub fn parse_sql_dard(
         let sql_type = get_u16(rest, 12, little_endian);
         rest = &rest[16..];
         let mut name = String::new();
-        if let Some(delim) = rest.windows(3).position(|w| w == [0xff, 0xff, 0xff]) {
+        let found = if delimiter_absent {
+            None
+        } else {
+            rest.windows(3).position(|w| w == [0xff, 0xff, 0xff])
+        };
+        delimiter_absent = found.is_none();
+        if let Some(delim) = found {
             let chunk = &rest[..delim];
             rest = &rest[delim + 3..];
             for offset in 0..chunk.len().saturating_sub(1) {
@@ -1518,7 +1528,10 @@ fn parse_sql_cursor_info_legacy(
     }
     let count = get_u16(rest, 0, little_endian) as usize;
     rest = &rest[2..];
-    let mut columns = Vec::with_capacity(count);
+    // Each column needs at least 16 bytes, so the data bounds the reservation.
+    let mut columns = Vec::with_capacity(count.min(rest.len() / 16));
+    // Once no FF FF FF delimiter is left, no later suffix has one either.
+    let mut delimiter_absent = false;
     for index in 0..count {
         if rest.len() < 16 {
             return Err(format!(
@@ -1532,10 +1545,14 @@ fn parse_sql_cursor_info_legacy(
         let sql_type = get_u16(rest, 12, little_endian);
         rest = &rest[16..];
         let mut name = String::new();
-        if let Some(delimiter) = rest
-            .windows(3)
-            .position(|window| window == [0xff, 0xff, 0xff])
-        {
+        let found = if delimiter_absent {
+            None
+        } else {
+            rest.windows(3)
+                .position(|window| window == [0xff, 0xff, 0xff])
+        };
+        delimiter_absent = found.is_none();
+        if let Some(delimiter) = found {
             let chunk = &rest[..delimiter];
             rest = &rest[delimiter + 3..];
             for position in 0..chunk.len().saturating_sub(1) {
@@ -2299,6 +2316,38 @@ mod tests {
                     .contains("truncated")
             );
         }
+    }
+
+    #[test]
+    fn sqldard_without_name_delimiters_parses_in_linear_time() {
+        // Unnamed columns of 45 bytes each and no FF FF FF anywhere: the
+        // delimiter search must not rescan the rest of the reply per column.
+        let count: u16 = 20_000;
+        let mut dard = vec![0xff, 1];
+        dard.extend_from_slice(&count.to_le_bytes());
+        for _ in 0..count {
+            let mut column = [0u8; 45];
+            column[12..14].copy_from_slice(&497u16.to_le_bytes());
+            dard.extend_from_slice(&column);
+        }
+        let started = std::time::Instant::now();
+        let columns = parse_sql_dard(&dard, true).unwrap();
+        assert_eq!(columns.len(), usize::from(count));
+        assert_eq!(columns[0].name, "PARAM1");
+        // The quadratic scan takes minutes here; the linear one milliseconds.
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn sqldard_count_larger_than_the_data_is_an_error() {
+        let mut dard = vec![0xff, 1];
+        dard.extend_from_slice(&u16::MAX.to_le_bytes());
+        dard.extend_from_slice(&[0u8; 45]);
+        assert!(parse_sql_dard(&dard, true).is_err());
     }
 
     #[test]
