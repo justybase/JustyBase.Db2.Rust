@@ -2,7 +2,7 @@
   "generator": "tools/api/generate-rust-surface.cjs",
   "crate": "justybase-db2",
   "counts": {
-    "struct": 50,
+    "struct": 51,
     "enum": 16,
     "trait": 0,
     "fn": 15,
@@ -17,7 +17,7 @@
     {
       "path": "config::Config",
       "kind": "struct",
-      "declaration": "pub struct Config { pub host: String, pub port: u16, pub database: String, pub user: String, pub password: String, pub use_ssl: bool, pub ssl_root_ca_path: String, pub ssl_client_cert_path: String, pub ssl_client_key_path: String, pub timeout_ms: i64, pub block_size: usize, pub protocol_limits: ProtocolLimits, pub security_mechanism: u16, pub kerberos_spn: String, pub kerberos_realm: String, pub krb5_principal: String, pub krb5_config_file: String, pub krb5_keytab_file: String, pub krb5_ccache_file: String, pub gssapi_token_file: String, pub client_appl_name: String, pub client_wrkstn_name: String, pub client_userid: String, pub client_acctng: String, pub client_corr_token: String, pub current_schema: String, pub params: HashMap<String, String>, }",
+      "declaration": "pub struct Config { pub host: String, pub port: u16, pub database: String, pub user: String, pub password: String, pub use_ssl: bool, pub ssl_root_ca_path: String, pub ssl_client_cert_path: String, pub ssl_client_key_path: String, pub timeout_ms: i64, pub block_size: usize, pub protocol_limits: ProtocolLimits, pub security_mechanism: u16, pub kerberos_spn: String, pub kerberos_realm: String, pub krb5_principal: String, pub krb5_config_file: String, pub krb5_keytab_file: String, pub krb5_ccache_file: String, pub gssapi_token_file: String, pub client_appl_name: String, pub client_wrkstn_name: String, pub client_userid: String, pub client_acctng: String, pub client_corr_token: String, pub current_schema: String, pub params: HashMap<String, String>, pub tls_override: Option<TlsOverride>, }",
       "methods": []
     },
     {
@@ -44,6 +44,12 @@
       "path": "config::redact_dsn",
       "kind": "fn",
       "declaration": "pub fn redact_dsn(input: &str) -> String",
+      "methods": []
+    },
+    {
+      "path": "config::TlsOverride",
+      "kind": "struct",
+      "declaration": "pub struct TlsOverride { pub client_config: Arc<ClientConfig>, pub server_name: String, }",
       "methods": []
     },
     {
@@ -1082,5 +1088,5 @@
       "methods": []
     }
   ],
-  "digest": "24f1a8de6007f705e71fd95a378e78e99a949a14a3a4ac91e9b665d4582c5c38"
+  "digest": "b0b983b998675c88e1f833fdb991f96b47c9ebd023082e8743a3b3e8bd153188"
 }

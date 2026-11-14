@@ -13,7 +13,7 @@ use justybase_db2::{
     Db2LobValue, Db2Parameter, Db2ParameterDirection, Db2Pool, Db2PooledSession,
     Db2ProcedureReader, Db2ProcedureResult, Db2QueryResult, Db2ResultSet, Db2RowReader, Db2RowRef,
     Db2Session, Db2Statement, Db2Transaction, Db2Value, Db2ValueRef, Db2Warning, PoolResetPolicy,
-    ProtocolLimits, parse_dsn, redact_dsn,
+    ProtocolLimits, TlsOverride, parse_dsn, redact_dsn,
 };
 
 fn main() {}

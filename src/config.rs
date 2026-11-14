@@ -1,5 +1,37 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::sync::Arc;
+
+use tokio_rustls::rustls::ClientConfig;
+
+/// TLS settings built by the caller, used instead of the CA file, client
+/// identity and system roots when `use_ssl` is set.
+///
+/// `server_name` is the name the server certificate must carry. It can
+/// differ from `Config::host`, for example when `host` is the local end of
+/// a tunnel. The connection keeps the configured port as is.
+#[derive(Clone)]
+pub struct TlsOverride {
+    pub client_config: Arc<ClientConfig>,
+    pub server_name: String,
+}
+
+impl PartialEq for TlsOverride {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.client_config, &other.client_config)
+            && self.server_name == other.server_name
+    }
+}
+
+impl Eq for TlsOverride {}
+
+impl fmt::Debug for TlsOverride {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TlsOverride")
+            .field("server_name", &self.server_name)
+            .finish_non_exhaustive()
+    }
+}
 
 /// Per-connection caps for lengths and materialized server responses.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -53,6 +85,8 @@ pub struct Config {
     pub client_corr_token: String,
     pub current_schema: String,
     pub params: HashMap<String, String>,
+    /// Caller-built TLS settings; see [`TlsOverride`]. Not set from a DSN.
+    pub tls_override: Option<TlsOverride>,
 }
 
 impl Default for Config {
@@ -85,6 +119,7 @@ impl Default for Config {
             client_corr_token: String::new(),
             current_schema: String::new(),
             params: HashMap::new(),
+            tls_override: None,
         }
     }
 }
@@ -103,6 +138,7 @@ impl fmt::Debug for Config {
             .field("protocol_limits", &self.protocol_limits)
             .field("security_mechanism", &self.security_mechanism)
             .field("params", &self.params)
+            .field("tls_override", &self.tls_override)
             .finish()
     }
 }
