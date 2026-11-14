@@ -97,6 +97,8 @@ Use environment variables or a secret store for credentials. Do not embed produc
 
 Use `db2s://` and configure a trusted CA/server certificate. IBM CLI-style key/value connection strings are supported for the documented subset, including `Security=SSL` and `SSLServerCertificate=...`. When a CA file is configured, it replaces the system trust store: only certificates in that file can validate the Db2 server. Unsupported security modes fail validation rather than silently falling back to plaintext.
 
+A program can also build the TLS settings itself with `Config::tls_override`: a rustls `ClientConfig` and the name the server certificate must carry. This is for a connection through a tunnel, where `host` is the local end, or for a custom certificate verifier. The override replaces the CA file and client certificate settings, and the configured port is used as is.
+
 ## Prepared statements
 
 ```rust

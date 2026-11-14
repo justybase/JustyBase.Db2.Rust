@@ -1979,7 +1979,7 @@ impl Db2Session {
                 format!("invalid DB2 current schema {:?}", config.current_schema),
             ));
         }
-        if config.use_ssl && config.port == 50_000 {
+        if config.use_ssl && config.port == 50_000 && config.tls_override.is_none() {
             config.port = 50_001;
         }
         let duration = timeout_duration(config.timeout_ms);
@@ -6927,6 +6927,38 @@ async fn connect_tls(
     socket: TcpStream,
     config: &Config,
 ) -> Result<tokio_rustls::client::TlsStream<TcpStream>, Db2Error> {
+    let (client, host) = match &config.tls_override {
+        Some(tls) => (tls.client_config.clone(), tls.server_name.as_str()),
+        None => (Arc::new(build_client_config(config)?), config.host.as_str()),
+    };
+    let name = ServerName::try_from(host.to_owned()).map_err(|_| {
+        Db2Error::new(
+            Db2ErrorKind::InvalidConfiguration,
+            "DB2 TLS hostname is invalid",
+        )
+    })?;
+    let connector = TlsConnector::from(client);
+    timeout(
+        timeout_duration(config.timeout_ms),
+        connector.connect(name, socket),
+    )
+    .await
+    .map_err(|_| {
+        Db2Error::timeout(
+            "DB2 TLS handshake timed out",
+            Db2OperationOutcome::NotStarted,
+        )
+    })?
+    .map_err(|error| {
+        Db2Error::new(
+            Db2ErrorKind::Transport,
+            format!("DB2 TLS handshake failed: {error}"),
+        )
+        .with_outcome(Db2OperationOutcome::NotStarted)
+    })
+}
+
+fn build_client_config(config: &Config) -> Result<ClientConfig, Db2Error> {
     let builder = ClientConfig::builder().with_root_certificates(build_root_store(config)?);
     let client = if !config.ssl_client_cert_path.is_empty() {
         let mut cert_file = BufReader::new(File::open(&config.ssl_client_cert_path)?);
@@ -6948,31 +6980,7 @@ async fn connect_tls(
     } else {
         builder.with_no_client_auth()
     };
-    let name = ServerName::try_from(config.host.clone()).map_err(|_| {
-        Db2Error::new(
-            Db2ErrorKind::InvalidConfiguration,
-            "DB2 TLS hostname is invalid",
-        )
-    })?;
-    let connector = TlsConnector::from(std::sync::Arc::new(client));
-    timeout(
-        timeout_duration(config.timeout_ms),
-        connector.connect(name, socket),
-    )
-    .await
-    .map_err(|_| {
-        Db2Error::timeout(
-            "DB2 TLS handshake timed out",
-            Db2OperationOutcome::NotStarted,
-        )
-    })?
-    .map_err(|error| {
-        Db2Error::new(
-            Db2ErrorKind::Transport,
-            format!("DB2 TLS handshake failed: {error}"),
-        )
-        .with_outcome(Db2OperationOutcome::NotStarted)
-    })
+    Ok(client)
 }
 
 fn decode_procedure_cursor_available(
@@ -11421,6 +11429,83 @@ mod tests {
         ))
         .await;
         assert!(result.is_err());
+        server.await.unwrap();
+    }
+
+    fn tls_override_for(server_name: &str) -> crate::config::TlsOverride {
+        use std::io::BufReader;
+        use tokio_rustls::rustls;
+        let mut roots = rustls::RootCertStore::empty();
+        for certificate in CertificateDer::pem_reader_iter(&mut BufReader::new(
+            std::fs::File::open(tls_fixture("ca.pem")).unwrap(),
+        )) {
+            roots.add(certificate.unwrap()).unwrap();
+        }
+        let certificates = CertificateDer::pem_reader_iter(&mut BufReader::new(
+            std::fs::File::open(tls_fixture("client.pem")).unwrap(),
+        ))
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+        let key = PrivateKeyDer::pem_reader_iter(&mut BufReader::new(
+            std::fs::File::open(tls_fixture("client-key.pem")).unwrap(),
+        ))
+        .next()
+        .unwrap()
+        .unwrap();
+        let client_config = rustls::ClientConfig::builder()
+            .with_root_certificates(roots)
+            .with_client_auth_cert(certificates, key)
+            .unwrap();
+        crate::config::TlsOverride {
+            client_config: Arc::new(client_config),
+            server_name: server_name.into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn tls_override_replaces_the_configured_roots_and_identity() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let acceptor = mutual_tls_acceptor();
+        let server = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            let mut tls = acceptor.accept(socket).await.unwrap();
+            serve_mutual_tls_setup(&mut tls).await;
+            let _ = tls.into_inner();
+        });
+
+        // No CA file and no client identity in the config itself: only the
+        // override can complete this handshake.
+        let mut config = mutual_tls_config(port, None, None);
+        config.host = "127.0.0.1".into();
+        config.ssl_root_ca_path.clear();
+        config.tls_override = Some(tls_override_for("localhost"));
+        let mut session = Db2Session::connect(config).await.unwrap();
+        assert!(!session.is_closed());
+        session.close().await.unwrap();
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn tls_override_checks_its_own_server_name_not_the_host() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let acceptor = mutual_tls_acceptor();
+        let server = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            let _ = acceptor.accept(socket).await;
+        });
+
+        // "localhost" is in the certificate; "db.example.test" is not.
+        let mut config = mutual_tls_config(port, None, None);
+        config.tls_override = Some(tls_override_for("db.example.test"));
+        let Err(error) = Db2Session::connect(config).await else {
+            panic!("the handshake must fail for a name the certificate lacks");
+        };
+        assert!(
+            error.to_string().contains("TLS handshake failed"),
+            "{error}"
+        );
         server.await.unwrap();
     }
 

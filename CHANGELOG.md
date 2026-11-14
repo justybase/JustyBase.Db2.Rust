@@ -6,6 +6,15 @@ The project follows Semantic Versioning.
 
 ## Unreleased
 
+### Added
+
+- `Config::tls_override` (`TlsOverride`): a caller-built rustls `ClientConfig`
+  and the name the server certificate must carry. When set with `use_ssl`, it
+  replaces the CA file, client identity and system roots, and port 50000 is no
+  longer rewritten to 50001. This allows TLS through a tunnel whose local end
+  has a different host name, or a caller-specific verifier. It is not set from
+  a DSN.
+
 ### Changed
 
 - Procedure materialization now returns each front row in O(1) instead of

@@ -13,7 +13,7 @@ pub mod resources;
 pub mod security;
 pub mod types;
 
-pub use config::{Config, ConfigError, ProtocolLimits, parse_dsn, redact_dsn};
+pub use config::{Config, ConfigError, ProtocolLimits, TlsOverride, parse_dsn, redact_dsn};
 pub use error::{Db2BatchError, Db2Error, Db2ErrorKind, Db2OperationOutcome, Db2Warning};
 pub use import::{
     Db2ImportColumn, Db2ImportError, Db2ImportOptions, Db2ImportPolicy, Db2ImportProgress,
